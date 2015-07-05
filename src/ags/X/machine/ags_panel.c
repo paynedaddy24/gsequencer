@@ -1,28 +1,29 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/X/machine/ags_panel.h>
 #include <ags/X/machine/ags_panel_callbacks.h>
 
+#include <ags-lib/object/ags_connectable.h>
+
 #include <ags/util/ags_id_generator.h>
 
-#include <ags/object/ags_application_context.h>
-#include <ags/object/ags_connectable.h>
 #include <ags/object/ags_plugin.h>
 
 #include <ags/file/ags_file.h>
@@ -209,7 +210,7 @@ ags_panel_init(AgsPanel *panel)
   panel->xml_type = "ags-panel\0";
 
   panel->vbox = (GtkVBox *) gtk_vbox_new(FALSE, 0);
-  gtk_container_add((GtkContainer*) (gtk_bin_get_child((GtkContainer *) panel)), (GtkWidget *) panel->vbox);
+  gtk_container_add((GtkContainer*) (gtk_bin_get_child((GtkBin *) panel)), (GtkWidget *) panel->vbox);
 
   //  AGS_MACHINE(panel)->output = (GtkContainer *) gtk_hbox_new(FALSE, 0);
   //  gtk_box_pack_start((GtkBox *) panel->vbox, (GtkWidget *) AGS_MACHINE(panel)->output, FALSE, FALSE, 0);
@@ -304,7 +305,7 @@ ags_panel_read(AgsFile *file, xmlNode *node, AgsPlugin *plugin)
 
   ags_file_add_id_ref(file,
 		      g_object_new(AGS_TYPE_FILE_ID_REF,
-				   "application-context\0", file->application_context,
+				   "main\0", file->ags_main,
 				   "file\0", file,
 				   "node\0", node,
 				   "xpath\0", g_strdup_printf("xpath=//*[@id='%s']\0", xmlGetProp(node, AGS_FILE_ID_PROP)),
@@ -313,8 +314,10 @@ ags_panel_read(AgsFile *file, xmlNode *node, AgsPlugin *plugin)
 
   list = file->lookup;
 
-  while((file_lookup = ags_file_lookup_find_by_node(list,
-						    node->parent)) != NULL){
+  while((list = ags_file_lookup_find_by_node(list,
+					     node->parent)) != NULL){
+    file_lookup = AGS_FILE_LOOKUP(list->data);
+    
     if(g_signal_handler_find(list->data,
 			     G_SIGNAL_MATCH_FUNC,
 			     0,
@@ -370,7 +373,7 @@ ags_panel_write(AgsFile *file, xmlNode *parent, AgsPlugin *plugin)
 
   ags_file_add_id_ref(file,
 		      g_object_new(AGS_TYPE_FILE_ID_REF,
-				   "application-context\0", file->application_context,
+				   "main\0", file->ags_main,
 				   "file\0", file,
 				   "node\0", node,
 				   "xpath\0", g_strdup_printf("xpath=//*[@id='%s']\0", id),
@@ -401,7 +404,7 @@ ags_panel_set_pads(AgsAudio *audio, GType type,
 
 /**
  * ags_panel_new:
- * @soundcard: the assigned soundcard.
+ * @devout: the assigned devout.
  *
  * Creates an #AgsPanel
  *
@@ -410,7 +413,7 @@ ags_panel_set_pads(AgsAudio *audio, GType type,
  * Since: 0.3
  */
 AgsPanel*
-ags_panel_new(GObject *soundcard)
+ags_panel_new(GObject *devout)
 {
   AgsPanel *panel;
   GValue value = {0,};
@@ -418,11 +421,11 @@ ags_panel_new(GObject *soundcard)
   panel = (AgsPanel *) g_object_new(AGS_TYPE_PANEL,
 				    NULL);
 
-  if(soundcard != NULL){
+  if(devout != NULL){
     g_value_init(&value, G_TYPE_OBJECT);
-    g_value_set_object(&value, soundcard);
+    g_value_set_object(&value, devout);
     g_object_set_property(G_OBJECT(AGS_MACHINE(panel)->audio),
-			  "soundcard\0", &value);
+			  "devout\0", &value);
     g_value_unset(&value);
   }
 

@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef __AGS_RECYCLING_H__
@@ -44,7 +45,7 @@ struct _AgsRecycling
   guint flags;
 
   GObject *channel;
-  GObject *soundcard;
+  GObject *devout;
 
   AgsRecycling *parent;
 
@@ -66,7 +67,7 @@ struct _AgsRecyclingClass
 
 GType ags_recycling_get_type();
 
-void ags_recycling_set_soundcard(AgsRecycling *recycling, GObject *soundcard);
+void ags_recycling_set_devout(AgsRecycling *recycling, GObject *devout);
 
 void ags_recycling_add_audio_signal(AgsRecycling *recycling,
 				    AgsAudioSignal *audio_signal);
@@ -86,6 +87,6 @@ gint ags_recycling_position(AgsRecycling *start_recycling, AgsRecycling *end_reg
 AgsRecycling* ags_recycling_find_next_channel(AgsRecycling *start_region, AgsRecycling *end_region,
 					      GObject *prev_channel);
 
-AgsRecycling* ags_recycling_new(GObject *soundcard);
+AgsRecycling* ags_recycling_new(GObject *devout);
 
 #endif /*__AGS_RECYCLING_H__*/

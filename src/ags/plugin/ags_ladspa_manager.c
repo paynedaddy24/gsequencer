@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2014 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/plugin/ags_ladspa_manager.h>
@@ -111,7 +112,7 @@ ags_ladspa_manager_finalize(GObject *gobject)
   ladspa_plugin = ladspa_manager->ladspa_plugin;
 
   g_list_free_full(ladspa_plugin,
-		   ags_ladspa_plugin_free);
+		   (GDestroyNotify) ags_ladspa_plugin_free);
 }
 
 /**
@@ -299,7 +300,7 @@ ags_ladspa_manager_load_default_directory()
 		   &error);
 
   if(error != NULL){
-    g_warning(error->message);
+    g_warning("%s\0", error->message);
   }
 
   while((filename = g_dir_read_name(dir)) != NULL){
@@ -308,62 +309,6 @@ ags_ladspa_manager_load_default_directory()
       ags_ladspa_manager_load_file(filename);
     }
   }
-}
-
-/**
- * ags_ladspa_manager_effect_index:
- * @filename: the plugin.so filename
- * @effect: the effect's name within plugin
- *
- * Retrieve the effect's index within @filename
- *
- * Returns: the index, G_MAXULONG if not found
- *
- * Since: 0.4
- */
-unsigned long
-ags_ladspa_manager_effect_index(gchar *filename,
-				gchar *effect)
-{
-  AgsLadspaPlugin *ladspa_plugin;
-
-  void *plugin_so;
-  LADSPA_Descriptor_Function ladspa_descriptor;
-  LADSPA_Descriptor *plugin_descriptor;
-
-  unsigned long index;
-  unsigned long i;
-
-  if(filename == NULL ||
-     effect == NULL){
-    return(G_MAXULONG);
-  }
-  
-  /* load plugin */
-  ags_ladspa_manager_load_file(filename);
-  ladspa_plugin = ags_ladspa_manager_find_ladspa_plugin(filename);
-
-  plugin_so = ladspa_plugin->plugin_so;
-
-  index = G_MAXULONG;
-
-  if(plugin_so){
-    ladspa_descriptor = (LADSPA_Descriptor_Function) dlsym(plugin_so,
-							   "ladspa_descriptor\0");
-    
-    if(dlerror() == NULL && ladspa_descriptor){
-      for(i = 0; (plugin_descriptor = ladspa_descriptor(i)) != NULL; i++){
-	if(!strncmp(plugin_descriptor->Name,
-		    effect,
-		    strlen(effect))){
-	  index = i;
-	  break;
-	}
-      }
-    }
-  }
-  
-  return(index);
 }
 
 /**

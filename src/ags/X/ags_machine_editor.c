@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/X/ags_machine_editor.h>
@@ -45,8 +46,6 @@ void ags_machine_editor_disconnect(AgsConnectable *connectable);
 void ags_machine_editor_set_update(AgsApplicable *applicable, gboolean update);
 void ags_machine_editor_apply(AgsApplicable *applicable);
 void ags_machine_editor_reset(AgsApplicable *applicable);
-void ags_machine_editor_destroy(GtkObject *object);
-void ags_machine_editor_show(GtkWidget *widget);
 
 void ags_machine_editor_real_set_machine(AgsMachineEditor *machine_editor,
 					 AgsMachine *machine);
@@ -201,7 +200,6 @@ ags_machine_editor_init(AgsMachineEditor *machine_editor)
   machine_editor->version = AGS_MACHINE_EDITOR_DEFAULT_VERSION;
   machine_editor->build_id = AGS_MACHINE_EDITOR_DEFAULT_BUILD_ID;
 
-  machine_editor->parent = NULL;
   machine_editor->machine = NULL;
 
   machine_editor->notebook =
@@ -247,12 +245,6 @@ ags_machine_editor_init(AgsMachineEditor *machine_editor)
 			   (GtkWidget *) gtk_label_new(g_strdup("resize channels\0")));
 
   /* GtkButton's in GtkDialog->action_area  */
-  machine_editor->add = (GtkButton *) gtk_button_new_from_stock(GTK_STOCK_ADD);
-  gtk_box_pack_start((GtkBox *) machine_editor->dialog.action_area, (GtkWidget *) machine_editor->add, FALSE, FALSE, 0);
-
-  machine_editor->remove = (GtkButton *) gtk_button_new_from_stock(GTK_STOCK_REMOVE);
-  gtk_box_pack_start((GtkBox *) machine_editor->dialog.action_area, (GtkWidget *) machine_editor->remove, FALSE, FALSE, 0);
-
   machine_editor->apply = (GtkButton *) gtk_button_new_from_stock(GTK_STOCK_APPLY);
   gtk_box_pack_start((GtkBox *) machine_editor->dialog.action_area, (GtkWidget *) machine_editor->apply, FALSE, FALSE, 0);
 
@@ -316,14 +308,6 @@ ags_machine_editor_connect(AgsConnectable *connectable)
 
   machine_editor = AGS_MACHINE_EDITOR(connectable);
 
-  /* GtkObject */
-  g_signal_connect((GObject *) machine_editor, "destroy\0",
-		   G_CALLBACK(ags_machine_editor_destroy_callback), (gpointer) machine_editor);
-
-  /* GtkWidget */
-  g_signal_connect((GObject *) machine_editor, "show\0",
-		   G_CALLBACK(ags_machine_editor_show_callback), (gpointer) machine_editor);
-
   /* GtkNotebook */
   g_signal_connect((GtkNotebook *) machine_editor->notebook, "switch-page\0",
 		   G_CALLBACK(ags_machine_editor_switch_page_callback), (gpointer) machine_editor);
@@ -338,12 +322,6 @@ ags_machine_editor_connect(AgsConnectable *connectable)
   ags_connectable_connect(AGS_CONNECTABLE(machine_editor->resize_editor));
 
   /* AgsMachineEditor buttons */
-  g_signal_connect((GObject *) machine_editor->add, "clicked\0",
-		   G_CALLBACK(ags_machine_editor_add_callback), (gpointer) machine_editor);
-
-  g_signal_connect((GObject *) machine_editor->remove, "clicked\0",
-		   G_CALLBACK(ags_machine_editor_remove_callback), (gpointer) machine_editor);
-
   g_signal_connect((GObject *) machine_editor->apply, "clicked\0",
 		   G_CALLBACK(ags_machine_editor_apply_callback), (gpointer) machine_editor);
 
@@ -357,7 +335,18 @@ ags_machine_editor_connect(AgsConnectable *connectable)
 void
 ags_machine_editor_disconnect(AgsConnectable *connectable)
 {
-  /* empty */
+  AgsMachineEditor *machine_editor;
+
+  machine_editor = AGS_MACHINE_EDITOR(connectable);
+
+  /* AgsMachineEditor tabs */
+  ags_connectable_disconnect(AGS_CONNECTABLE(machine_editor->output_editor));
+  ags_connectable_disconnect(AGS_CONNECTABLE(machine_editor->input_editor));
+
+  ags_connectable_disconnect(AGS_CONNECTABLE(machine_editor->output_link_editor));
+  ags_connectable_disconnect(AGS_CONNECTABLE(machine_editor->input_link_editor));
+
+  ags_connectable_disconnect(AGS_CONNECTABLE(machine_editor->resize_editor));
 }
 
 void
@@ -406,18 +395,6 @@ ags_machine_editor_reset(AgsApplicable *applicable)
   ags_applicable_reset(AGS_APPLICABLE(machine_editor->input_link_editor));
 
   ags_applicable_reset(AGS_APPLICABLE(machine_editor->resize_editor));
-}
-
-void
-ags_machine_editor_destroy(GtkObject *object)
-{
-  /* empty */
-}
-
-void
-ags_machine_editor_show(GtkWidget *widget)
-{
-  /* empty */
 }
 
 /**

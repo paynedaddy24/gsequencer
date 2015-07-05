@@ -1,26 +1,25 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2013 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/thread/file/ags_thread_file_xml.h>
 
 #include <ags/util/ags_id_generator.h>
-
-#include <ags/object/ags_application_context.h>
 
 #include <ags/file/ags_file_stock.h>
 #include <ags/file/ags_file_id_ref.h>
@@ -33,6 +32,11 @@
 
 void ags_file_read_thread_start(AgsFileLaunch *file_launch, AgsThread *thread);
 
+void ags_file_read_thread_resolve_devout(AgsFileLookup *file_lookup,
+					 AgsThread *thread);
+void ags_file_write_thread_resolve_devout(AgsFileLookup *file_lookup,
+					  AgsThread *thread);
+
 void ags_file_read_thread_pool_start(AgsFileLaunch *file_launch, AgsThreadPool *thread_pool);
 
 void
@@ -43,6 +47,7 @@ ags_file_read_thread(AgsFile *file, xmlNode *node, AgsThread **thread)
   AgsThread *gobject;
   xmlNode *child;
   xmlChar *type_name;
+  static gboolean thread_type_is_registered = FALSE;
 
   if(*thread != NULL &&
      AGS_IS_RETURNABLE_THREAD(*thread)){
@@ -51,6 +56,12 @@ ags_file_read_thread(AgsFile *file, xmlNode *node, AgsThread **thread)
 
   if(*thread == NULL){
     GType type;
+
+    if(!thread_type_is_registered){
+      ags_main_register_thread_type();
+
+      thread_type_is_registered = TRUE;
+    }
 
     type_name = xmlGetProp(node,
 			   AGS_FILE_TYPE_PROP);
@@ -69,11 +80,9 @@ ags_file_read_thread(AgsFile *file, xmlNode *node, AgsThread **thread)
     gobject = *thread;
   }
 
-  g_message(G_OBJECT_TYPE_NAME(gobject));
-
   ags_file_add_id_ref(file,
 		      g_object_new(AGS_TYPE_FILE_ID_REF,
-				   "application-context\0", file->application_context,
+				   "main\0", file->ags_main,
 				   "file\0", file,
 				   "node\0", node,
 				   "xpath\0", g_strdup_printf("xpath=//*[@id='%s']\0", xmlGetProp(node, AGS_FILE_ID_PROP)),
@@ -101,6 +110,16 @@ ags_file_read_thread(AgsFile *file, xmlNode *node, AgsThread **thread)
     }
   }
 
+  /* devout */
+  file_lookup = (AgsFileLookup *) g_object_new(AGS_TYPE_FILE_LOOKUP,
+					       "file\0", file,
+					       "node\0", node,
+					       "reference\0", gobject,
+					       NULL);
+  ags_file_add_lookup(file, (GObject *) file_lookup);
+  g_signal_connect(G_OBJECT(file_lookup), "resolve\0",
+		   G_CALLBACK(ags_file_read_thread_resolve_devout), gobject);
+
   /* read children */
   child = node->children;
 
@@ -109,30 +128,108 @@ ags_file_read_thread(AgsFile *file, xmlNode *node, AgsThread **thread)
       if(!xmlStrncmp(child->name,
 		     "ags-thread-list\0",
 		     16)){
-	GList *list;
+	if(AGS_IS_AUDIO_LOOP(gobject)){
+	  xmlXPathContext *xpath_context;
+	  xmlXPathObject *xpath_object;
+    
+	  /* task thread */
+	  xpath_context = xmlXPathNewContext(file->doc);
+	  xpath_context->node = child;
+	  //	  xmlXPathSetContextNode(child,
+	  //			 xpath_context);
+	  xpath_object = xmlXPathCompiledEval(xmlXPathCompile("./ags-thread[@type='AgsTaskThread']\0"),
+					      xpath_context);
+	    //xmlXPathNodeEval(child,
+	    //		  "./ags-thread[@type='AgsTaskThread']\0",
+	    //		  xpath_context);
 
-	list = NULL;
-	
-	ags_file_read_thread_list(file,
-				  child,
-				  &list);
+	  ags_file_read_thread(file,
+			       xpath_object->nodesetval->nodeTab[0],
+			       &(AGS_AUDIO_LOOP(gobject)->task_thread));
+	  ags_thread_add_child(gobject,
+			       AGS_AUDIO_LOOP(gobject)->task_thread);
 
-	   while(list != NULL){
-	     ags_thread_add_child(gobject,
-				  list->data);
+	  /* devout thread */
+	  xpath_context = xmlXPathNewContext(file->doc);
+	  xpath_context->node = child;
+	  xpath_object = xmlXPathCompiledEval(xmlXPathCompile("./ags-thread[@type='AgsDevoutThread']\0"),
+					      xpath_context);
 
-	    list = list->next;
-	   }
-	}else if(!xmlStrncmp("ags-main-loop\0",
-		     child->name,
-		     11)){
-	ags_file_read_main_loop(file,
-				child,
-				gobject);
+	  ags_file_read_thread(file,
+			       xpath_object->nodesetval->nodeTab[0],
+			       &(AGS_AUDIO_LOOP(gobject)->devout_thread));
+	  ags_thread_add_child(gobject,
+			       AGS_AUDIO_LOOP(gobject)->devout_thread);
+
+	  /* timestamp thread */
+	  xpath_context = xmlXPathNewContext(file->doc);
+	  xpath_context->node = child;
+	  xpath_object = xmlXPathCompiledEval(xmlXPathCompile("./ags-thread[@type='AgsDevoutThread']/ags-thread-list/ags-thread[@type='AgsTimestampThread']\0"),
+					      xpath_context);
+
+	  ags_file_read_thread(file,
+			       xpath_object->nodesetval->nodeTab[0],
+			       &(AGS_DEVOUT_THREAD(AGS_AUDIO_LOOP(gobject)->devout_thread)->timestamp_thread));
+	  ags_thread_add_child(AGS_AUDIO_LOOP(gobject)->devout_thread,
+			       AGS_DEVOUT_THREAD(AGS_AUDIO_LOOP(gobject)->devout_thread)->timestamp_thread);
+
+	  /* gui thread */
+	  xpath_context = xmlXPathNewContext(file->doc);
+	  xpath_context->node = child;
+	  xpath_object = xmlXPathCompiledEval(xmlXPathCompile("./ags-thread[@type='AgsGuiThread']\0"),
+					      xpath_context);
+
+	  ags_file_read_thread(file,
+			       xpath_object->nodesetval->nodeTab[0],
+			       &(AGS_AUDIO_LOOP(gobject)->gui_thread));
+	  ags_thread_add_child(gobject,
+			       AGS_AUDIO_LOOP(gobject)->gui_thread);
+	}else{
+	  GList *list;
+
+	  list = NULL;
+
+	  //FIXME:JK: buggy
+	  //	  ags_file_read_thread_list(file,
+	  //			    child,
+	  //			    &list);
+
+	  //  while(list != NULL){
+	    //  ags_thread_add_child(gobject,
+	    //			 list->data);
+
+	    // list = list->next;
+	  //  }
+	}
+      }else if(!xmlStrncmp(child->name,
+			   "ags-audio-loop\0",
+			   15)){
+	ags_file_read_audio_loop(file,
+				 child,
+				 AGS_AUDIO_LOOP(gobject));
       }
     }
 
     child = child->next;
+  }
+}
+
+void 
+ags_file_read_thread_resolve_devout(AgsFileLookup *file_lookup,
+				    AgsThread *thread)
+{
+  AgsFileIdRef *id_ref;
+  gchar *xpath;
+
+  xpath = (gchar *) xmlGetProp(file_lookup->node,
+			       "devout\0");
+
+  id_ref = (AgsFileIdRef *) ags_file_find_id_ref_by_xpath(file_lookup->file, xpath);
+
+  if(id_ref != NULL){
+    g_object_set(G_OBJECT(thread),
+		 "devout\0", id_ref->ref,
+		 NULL);
   }
 }
 
@@ -142,15 +239,15 @@ ags_file_read_thread_start(AgsFileLaunch *file_launch, AgsThread *thread)
   thread->flags &= (~AGS_THREAD_RUNNING);
   ags_thread_start(thread);
 
-  pthread_mutex_lock(&(thread->start_mutex));
+  pthread_mutex_lock(thread->start_mutex);
 
   while((AGS_THREAD_INITIAL_RUN & (g_atomic_int_get(&(thread->flags)))) == 0){
-    pthread_cond_wait(&(thread->start_cond),
-		      &(thread->start_mutex));
+    pthread_cond_wait(thread->start_cond,
+		      thread->start_mutex);
     
   }
 
-  pthread_mutex_unlock(&(thread->start_mutex));
+  pthread_mutex_unlock(thread->start_mutex);
 }
 
 xmlNode*
@@ -175,7 +272,7 @@ ags_file_write_thread(AgsFile *file, xmlNode *parent, AgsThread *thread)
  
   ags_file_add_id_ref(file,
 		      g_object_new(AGS_TYPE_FILE_ID_REF,
-				   "application-context\0", file->application_context,
+				   "main\0", file->ags_main,
 				   "file\0", file,
 				   "node\0", node,
 				   "xpath\0", g_strdup_printf("xpath=//*[@id='%s']\0", id),
@@ -189,6 +286,16 @@ ags_file_write_thread(AgsFile *file, xmlNode *parent, AgsThread *thread)
   xmlNewProp(node,
 	     AGS_FILE_FLAGS_PROP,
 	     g_strdup_printf("%x\0", thread->flags));
+
+  /* devout */
+  file_lookup = (AgsFileLookup *) g_object_new(AGS_TYPE_FILE_LOOKUP,
+					       "file\0", file,
+					       "node\0", node,
+					       "reference\0", thread,
+					       NULL);
+  ags_file_add_lookup(file, (GObject *) file_lookup);
+  g_signal_connect(G_OBJECT(file_lookup), "resolve\0",
+		   G_CALLBACK(ags_file_write_thread_resolve_devout), thread);
 
   xmlAddChild(parent,
 	      node);
@@ -213,6 +320,22 @@ ags_file_write_thread(AgsFile *file, xmlNode *parent, AgsThread *thread)
 			  current);
     current = current->next;
   }
+}
+
+void
+ags_file_write_thread_resolve_devout(AgsFileLookup *file_lookup,
+				     AgsThread *thread)
+{
+  AgsFileIdRef *id_ref;
+  gchar *id;
+
+  id_ref = (AgsFileIdRef *) ags_file_find_id_ref_by_reference(file_lookup->file, thread->devout);
+
+  id = xmlGetProp(id_ref->node, AGS_FILE_ID_PROP);
+
+  xmlNewProp(file_lookup->node,
+	     "devout\0",
+	     g_strdup_printf("xpath=//ags-devout[@id='%s']\0", id));
 }
 
 void
@@ -247,7 +370,7 @@ ags_file_read_thread_list(AgsFile *file, xmlNode *node, GList **thread)
 
   ags_file_add_id_ref(file,
 		      g_object_new(AGS_TYPE_FILE_ID_REF,
-				   "application-context\0", file->application_context,
+				   "main\0", file->ags_main,
 				   "file\0", file,
 				   "node\0", node,
 				   "xpath\0", g_strdup_printf("xpath=//*[@id='%s']\0", id),
@@ -273,7 +396,7 @@ ags_file_write_thread_list(AgsFile *file, xmlNode *parent, GList *thread)
 
   ags_file_add_id_ref(file,
 		      g_object_new(AGS_TYPE_FILE_ID_REF,
-				   "application-context\0", file->application_context,
+				   "main\0", file->ags_main,
 				   "file\0", file,
 				   "node\0", node,
 				   "xpath\0", g_strdup_printf("xpath=//*[@id='%s']\0", id),
@@ -314,12 +437,12 @@ ags_file_read_thread_pool(AgsFile *file, xmlNode *node, AgsThreadPool **thread_p
 
   //TODO:JK: implement me
   //  g_object_set(G_OBJECT(gobject),
-  //	       "ags-main\0", file->application_context,
+  //	       "ags-main\0", file->ags_main,
   //	       NULL);
 
   ags_file_add_id_ref(file,
 		      g_object_new(AGS_TYPE_FILE_ID_REF,
-				   "application-context\0", file->application_context,
+				   "main\0", file->ags_main,
 				   "file\0", file,
 				   "node\0", node,
 				   "xpath\0", g_strdup_printf("xpath=//*[@id='%s']\0", xmlGetProp(node, AGS_FILE_ID_PROP)),
@@ -349,7 +472,7 @@ ags_file_write_thread_pool(AgsFile *file, xmlNode *parent, AgsThreadPool *thread
 
   ags_file_add_id_ref(file,
 		      g_object_new(AGS_TYPE_FILE_ID_REF,
-				   "application-context\0", file->application_context,
+				   "main\0", file->ags_main,
 				   "file\0", file,
 				   "node\0", node,
 				   "xpath\0", g_strdup_printf("xpath=//*[@id='%s']\0", id),
@@ -375,7 +498,7 @@ ags_file_read_main_loop(AgsFile *file, xmlNode *node, AgsThread *main_loop)
 
   ags_file_add_id_ref(file,
 		      g_object_new(AGS_TYPE_FILE_ID_REF,
-				   "application-context\0", file->application_context,
+				   "main\0", file->ags_main,
 				   "file\0", file,
 				   "node\0", node,
 				   "xpath\0", g_strdup_printf("xpath=//*[@id='%s']\0", xmlGetProp(node, AGS_FILE_ID_PROP)),
@@ -403,7 +526,7 @@ ags_file_write_main_loop(AgsFile *file, xmlNode *parent, AgsThread *main_loop)
 
   ags_file_add_id_ref(file,
 		      g_object_new(AGS_TYPE_FILE_ID_REF,
-				   "application-context\0", file->application_context,
+				   "main\0", file->ags_main,
 				   "file\0", file,
 				   "node\0", node,
 				   "xpath\0", g_strdup_printf("xpath=//*[@id='%s']\0", id),

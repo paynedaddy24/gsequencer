@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include "ags_dial.h"
@@ -191,7 +192,7 @@ ags_dial_set_property(GObject *gobject,
 	g_object_ref(G_OBJECT(adjustment));
       }
 
-      dial->adjustment = (GObject *) adjustment;
+      dial->adjustment = adjustment;
     }
     break;
   default:
@@ -227,7 +228,7 @@ ags_dial_map(GtkWidget *widget)
     GTK_WIDGET_CLASS (ags_dial_parent_class)->map(widget);
     
     gdk_window_show(widget->window);
-    ags_dial_draw(widget);
+    ags_dial_draw((AgsDial *) widget);
   }
 }
 
@@ -712,11 +713,11 @@ ags_dial_draw(AgsDial *dial)
   }else if(dial->adjustment->upper < 0.0 && dial->adjustment->lower < 0.0){
     range = -1.0 * (dial->adjustment->lower - dial->adjustment->upper);
   }else{
-    range = (dial->adjustment->upper - dial->adjustment->lower);
+    range = (dial->adjustment->upper + dial->adjustment->lower);
   }
 
   if(range == 0.0){
-    g_warning("ags_dial.c: range = 0, lower = %f, upper = %f\0", dial->adjustment->lower, dial->adjustment->upper);
+    g_warning("ags_dial.c - range = 0.0\0");
     return;
   }
   

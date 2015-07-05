@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/X/ags_listing_editor.h>
@@ -148,6 +149,17 @@ ags_listing_editor_connect(AgsConnectable *connectable)
   machine_editor = (AgsMachineEditor *) gtk_widget_get_ancestor(GTK_WIDGET(listing_editor),
 								AGS_TYPE_MACHINE_EDITOR);
 
+  if(machine_editor != NULL &&
+     machine_editor->machine != NULL){
+    AgsAudio *audio;
+
+    /* AgsAudio */
+    audio = machine_editor->machine->audio;
+
+    listing_editor->set_pads_handler = g_signal_connect_after(G_OBJECT(audio), "set_pads\0",
+							      G_CALLBACK(ags_listing_editor_set_pads_callback), listing_editor);
+  }
+
   /* AgsPadEditor */
   pad_editor_start = 
     pad_editor = gtk_container_get_children(GTK_CONTAINER(listing_editor->child));
@@ -164,7 +176,39 @@ ags_listing_editor_connect(AgsConnectable *connectable)
 void
 ags_listing_editor_disconnect(AgsConnectable *connectable)
 {
-  /* empty */
+  AgsMachineEditor *machine_editor;
+  AgsListingEditor *listing_editor;
+  GList *pad_editor, *pad_editor_start;
+
+  ags_listing_editor_parent_connectable_interface->connect(connectable);
+
+  listing_editor = AGS_LISTING_EDITOR(connectable);
+
+  machine_editor = (AgsMachineEditor *) gtk_widget_get_ancestor(GTK_WIDGET(listing_editor),
+								AGS_TYPE_MACHINE_EDITOR);
+
+  if(machine_editor != NULL &&
+     machine_editor->machine != NULL){
+    AgsAudio *audio;
+
+    /* AgsAudio */
+    audio = machine_editor->machine->audio;
+
+    g_signal_handler_disconnect(audio,
+				listing_editor->set_pads_handler);
+  }
+
+  /* AgsPadEditor */
+  pad_editor_start = 
+    pad_editor = gtk_container_get_children(GTK_CONTAINER(listing_editor->child));
+
+  while(pad_editor != NULL){
+    ags_connectable_disconnect(AGS_CONNECTABLE(pad_editor->data));
+
+    pad_editor = pad_editor->next;
+  }
+  
+  g_list_free(pad_editor_start);
 }
 
 void

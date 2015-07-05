@@ -180,7 +180,7 @@
 	  id               ID         #REQUIRED
 	  version          CDATA      #REQUIRED
 	  build-id         CDATA      #REQUIRED
-	  log-file         NMTOKEN    #REQUIRED
+	  log-file         NMTOKEN    #IMPLIED
 	  >
 
 <!-- thread -->
@@ -229,17 +229,28 @@
 	  id               ID         #REQUIRED
 	  >
 
-<!ELEMENT ags-soundcard (ags-audio-list)>
-<!ATTLIST ags-soundcard
+<!ELEMENT ags-devout (ags-audio-list, ags-delay-data?, ags-attack-data?)>
+<!ATTLIST ags-devout
 	  id               ID         #REQUIRED
-	  type             CDATA      "AgsDevout"
-	  device           CDATA      "default"
-	  channels         NMTOKEN    2
-	  format           NMTOKEN    16 <!-- renamed bits -->
-	  buffer-size      NMTOKEN    128
-	  samplerate       NMTOKEN    44100 <!-- renamed frequence, frequency -->
+	  flags            PCDATA     #REQUIRED
+	  dsp-channels     NMTOKEN    2
+	  pcm-channels     NMTOKEN    2
+	  bits             NMTOKEN    16
+	  buffer-size      NMTOKEN    940
+	  frequency        NMTOKEN    44100 <!-- renamed frequence -->
 	  bpm              NMTOKEN    120.0
-	  note-offset      NMTOKEN    #REQUIRED
+	  delay-counter    NMTOKEN    0
+	  device           CDATA      "default"
+	  >
+
+<!ELEMENT ags-delay-data (NMTOKEN)*> <!-- default start 84 -->
+<!ATTLIST ags-delay-data
+	  checksum        PCDATA      #REQUIRED
+	  >
+
+<!ELEMENT ags-attack-data (NMTOKEN)*>
+<!ATTLIST ags-attack-data
+	  checksum        PCDATA      #REQUIRED
 	  >
 
 <!ELEMENT ags-playback-list (ags-playback*)>
@@ -260,7 +271,7 @@
 	  id               ID         #REQUIRED
 	  >
 
-<!ELEMENT ags-audio (ags-channel-list, ags-channel-list, ags-recall-list, ags-recall-list, ags-notation-list)>
+<!ELEMENT ags-audio (ags-channel-list?, ags-channel-list?, ags-recall-list?, ags-recall-list?, ags-notation-list?)>
 <!ATTLIST ags-audio
 	  id               ID         #REQUIRED
 	  flags            PCDATA     #REQUIRED
@@ -370,21 +381,19 @@
 	  id               ID         #REQUIRED
 	  >
 
-<!ELEMENT ags-notation (ags-timestamp, ags-note-list)>
+<!ELEMENT ags-notation (ags-timestamp?, ags-note-list)>
 <!ATTLIST ags-notation
 	  id               ID         #REQUIRED
 	  port             IDREF      #REQUIRED
 	  flags            PCDATA     #REQUIRED
 	  audio-channel    NMTOKEN    #REQUIRED
 	  key              CDATA      "violine"
-	  base-frequency   NMTOKEN    440.0
-	  bpm              NMTOKEN    120.0
+	  base-note        NMTOKEN    "A"
+	  base-frequency   NMTOKEN    #IMPLIED
+	  bpm              NMTOKEN    #IMPLIED
 	  max-note-length  NMTOKEN    16.0
 	  loop-start       NMTOKEN    #IMPLIED
 	  loop-end         NMTOKEN    #IMPLIED
-	  <!-- TODO:JK: implement following -->
-	  delay            NMTOKEN    #REQUIRED
-	  attack           NMTOKEN    #REQUIRED
 	  >
 
 <!ELEMENT ags-note-list (ags-note*)>
@@ -519,12 +528,12 @@
 	  value                NMTOKEN    #IMPLIED
 	  >
 
-<!ELEMENT ags-window (ags-menu-bar, ags-machine-counter-list, ags-machine-list, ags-editor, ags-navigation, ags-dialog-list, ags-machine-editor-list)>
+<!ELEMENT ags-window (ags-menu-bar?, ags-machine-counter-list?, ags-machine-list?, ags-editor?, ags-navigation?, ags-dialog-list?, ags-machine-editor-list?)>
 <!ATTLIST ags-window
 	  id               ID         #REQUIRED
 	  flags            PCDATA     #REQUIRED
-	  name             CDATA      #REQUIRED
-	  soundcard        CDATA      #REQUIRED
+	  name             CDATA      #IMPLIED
+	  devout           CDATA      #REQUIRED
 	  >
 
 <!ELEMENT ags-menu-bar EMPTY>
@@ -562,7 +571,7 @@
 	  file-input-flags PCDATA     #REQUIRED
 	  name             CDATA      #REQUIRED
 	  audio            IDREF      #REQUIRED
-	  machine-editor   IDREF      #REQUIRED
+	  machine-editor   IDREF      #IMPLIED
 	  rename-dialog    IDREF      #IMPLIED
 	  >
 

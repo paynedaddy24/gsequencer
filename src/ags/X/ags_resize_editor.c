@@ -1,29 +1,31 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/X/ags_resize_editor.h>
 
-#include <ags/object/ags_application_context.h>
-#include <ags/object/ags_connectable.h>
+#include <ags/main.h>
+
+#include <ags-lib/object/ags_connectable.h>
 
 #include <ags/object/ags_applicable.h>
 
-#include <ags/thread/ags_thread-posix.h>
+#include <ags/thread/ags_audio_loop.h>
 #include <ags/thread/ags_task_thread.h>
 
 #include <ags/audio/ags_audio.h>
@@ -32,7 +34,6 @@
 
 #include <ags/audio/task/ags_resize_audio.h>
 
-#include <ags/X/ags_window.h>
 #include <ags/X/ags_machine_editor.h>
 
 void ags_resize_editor_class_init(AgsResizeEditorClass *resize_editor);
@@ -254,18 +255,11 @@ ags_resize_editor_set_update(AgsApplicable *applicable, gboolean update)
 void
 ags_resize_editor_apply(AgsApplicable *applicable)
 {
-  AgsWindow *window;
   AgsMachineEditor *machine_editor;
   AgsResizeEditor *resize_editor;
-
   AgsAudio *audio;
   AgsResizeAudio *resize_audio;
-  
-  AgsThread *main_loop, *current;
-  AgsTaskThread *task_thread;
 
-  AgsApplicationContext *application_context;
-  
   resize_editor = AGS_RESIZE_EDITOR(applicable);
 
   if((AGS_PROPERTY_EDITOR_ENABLED & (AGS_PROPERTY_EDITOR(resize_editor)->flags)) == 0)
@@ -273,15 +267,6 @@ ags_resize_editor_apply(AgsApplicable *applicable)
   
   machine_editor = AGS_MACHINE_EDITOR(gtk_widget_get_ancestor(GTK_WIDGET(resize_editor),
 							      AGS_TYPE_MACHINE_EDITOR));
-
-  window = machine_editor->parent;
-
-  application_context = window->application_context;
-  
-  main_loop = application_context->main_loop;
-
-  task_thread = ags_thread_find_type(main_loop,
-				     AGS_TYPE_TASK_THREAD);
 
   audio = machine_editor->machine->audio;
 
@@ -292,7 +277,7 @@ ags_resize_editor_apply(AgsApplicable *applicable)
 				      (guint) gtk_spin_button_get_value_as_int(resize_editor->audio_channels));
       
   /* append AgsResizeAudio */
-  ags_task_thread_append_task(task_thread,
+  ags_task_thread_append_task(AGS_TASK_THREAD(AGS_AUDIO_LOOP(AGS_MAIN(AGS_DEVOUT(audio->devout)->ags_main)->main_loop)->task_thread),
 			      AGS_TASK(resize_audio));
 }
 
@@ -310,12 +295,22 @@ ags_resize_editor_reset(AgsApplicable *applicable)
 
   audio = machine_editor->machine->audio;
 
+  if((AGS_MACHINE_MONO & (machine_editor->machine->mapping_flags)) != 0){
+    gtk_spin_button_set_range(resize_editor->audio_channels,
+			      0.0, 1.0);
+  }
+  
   gtk_spin_button_set_value(resize_editor->audio_channels,
 			    audio->audio_channels);
 
   gtk_spin_button_set_value(resize_editor->input_pads,
 			    audio->input_pads);
 
+  if((AGS_AUDIO_OUTPUT_HAS_RECYCLING & (machine_editor->machine->audio->flags)) == 0){
+    gtk_spin_button_set_range(resize_editor->output_pads,
+			      0.0, 1.0);
+  }
+  
   gtk_spin_button_set_value(resize_editor->output_pads,
 			    audio->output_pads);
 }

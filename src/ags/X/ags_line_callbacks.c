@@ -1,24 +1,25 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/X/ags_line_callbacks.h>
 
-#include <ags/object/ags_application_context.h>
+#include <ags/main.h>
 
 #ifdef AGS_USE_LINUX_THREADS
 #include <ags/thread/ags_thread-kthreads.h>
@@ -31,17 +32,18 @@
 #include <ags/audio/ags_recall.h>
 #include <ags/audio/ags_recall_audio.h>
 #include <ags/audio/ags_recall_audio_run.h>
+#include <ags/audio/ags_recall_channel.h>
 #include <ags/audio/ags_recall_id.h>
 #include <ags/audio/ags_port.h>
 #include <ags/audio/ags_recycling_context.h>
 
+#include <ags/audio/recall/ags_peak_channel.h>
 #include <ags/audio/recall/ags_volume_channel.h>
 #include <ags/audio/recall/ags_copy_pattern_channel.h>
 #include <ags/audio/recall/ags_copy_pattern_channel_run.h>
 
 #include <ags/widget/ags_vindicator.h>
 
-#include <ags/X/ags_window.h>
 #include <ags/X/ags_machine.h>
 #include <ags/X/ags_pad.h>
 #include <ags/X/ags_line_member.h>
@@ -52,7 +54,7 @@ int
 ags_line_parent_set_callback(GtkWidget *widget, GtkObject *old_parent, AgsLine *line)
 {
   if(old_parent == NULL){
-    gtk_widget_show_all(GTK_WIDGET(line));
+    //    gtk_widget_show_all(GTK_WIDGET(line));
   }
 }
 
@@ -173,35 +175,20 @@ ags_line_volume_callback(GtkRange *range,
 }
 
 void
-ags_line_peak_run_post_callback(AgsRecall *peak_channel,
+ags_line_peak_run_post_callback(AgsRecall *peak_channel_run,
 				AgsLine *line)
 {
-  AgsWindow *window;
-  AgsMachine *machine;
-  AgsChangeIndicator *change_indicator;
-
-  AgsThread *main_loop;
   AgsTaskThread *task_thread;
-
-  AgsApplicationContext *application_context;
-  
+  AgsChangeIndicator *change_indicator;
+  AgsMachine *machine;
   GList *list, *list_start;
 
-  machine = (AgsMachine *) gtk_widget_get_ancestor(line,
+  machine = (AgsMachine *) gtk_widget_get_ancestor((GtkWidget *) line,
 						   AGS_TYPE_MACHINE);
+  task_thread = (AgsTaskThread *) AGS_AUDIO_LOOP(AGS_MAIN(AGS_DEVOUT(machine->audio->devout)->ags_main)->main_loop)->task_thread;
 
-  window = gtk_widget_get_ancestor(machine,
-				   AGS_TYPE_WINDOW);
-
-  application_context = window->application_context;
-
-  main_loop = application_context->main_loop;
-  
-  task_thread = ags_thread_find_type(main_loop,
-				     AGS_TYPE_TASK_THREAD);
-  
   list_start = 
-    list = gtk_container_get_children(AGS_LINE(line)->expander->table);
+    list = gtk_container_get_children((GtkContainer *) AGS_LINE(line)->expander->table);
 
   while(list != NULL){
     if(AGS_IS_LINE_MEMBER(list->data) &&
@@ -211,25 +198,24 @@ ags_line_peak_run_post_callback(AgsRecall *peak_channel,
       gdouble peak;
       GValue value = {0,};
 
-      child = gtk_bin_get_child(AGS_LINE_MEMBER(list->data));
+      child = gtk_bin_get_child(GTK_BIN(list->data));
 
-      if(AGS_RECYCLING_CONTEXT(peak_channel->recall_id->recycling_context)->parent == NULL){
-	port = AGS_LINE_MEMBER(list->data)->port;
-      }else{
-	port = AGS_LINE_MEMBER(list->data)->recall_port;
-      }
-
+      port = AGS_PEAK_CHANNEL(AGS_RECALL_CHANNEL_RUN(peak_channel_run)->recall_channel)->peak;
+	
       g_value_init(&value, G_TYPE_DOUBLE);
       ags_port_safe_read(port,
 			 &value);
 
       peak = g_value_get_double(&value);
 
-      change_indicator = ags_change_indicator_new(child,
+      //      if(peak_channel_run->recall_id->recycling_container->parent == NULL)
+	//	g_message("%f\0", peak);
+      
+      change_indicator = ags_change_indicator_new((AgsIndicator *) child,
 						  peak);
 
       ags_task_thread_append_task(task_thread,
-				  change_indicator);
+				  (AgsTask *) change_indicator);
 
       break;
     }
@@ -241,15 +227,14 @@ ags_line_peak_run_post_callback(AgsRecall *peak_channel,
 }
 
 void
-ags_line_channel_done_callback(AgsChannel *source, AgsLine *line)
+ags_line_channel_done_callback(AgsChannel *source, AgsRecallID *recall_id,
+			       AgsLine *line)
 {
   AgsChannel *channel;
   AgsPlayback *playback;
   AgsChannel *next_pad;
   GList *current_recall;
   gboolean all_done;
-
-  g_message("ags_line_channel_done\0");
 
   channel = AGS_PAD(AGS_LINE(line)->pad)->channel;
   next_pad = channel->next_pad;

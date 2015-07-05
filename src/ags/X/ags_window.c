@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/X/ags_window.h>
@@ -22,6 +23,8 @@
 #include <ags/object/ags_connectable.h>
 
 #include <ags/X/import/ags_midi_import_wizard.h>
+
+#include <ags/main.h>
 
 #include <ags/X/machine/ags_panel.h>
 #include <ags/X/machine/ags_mixer.h>
@@ -63,8 +66,8 @@ static GList* ags_window_standard_machine_counter();
 
 enum{
   PROP_0,
-  PROP_SOUNDCARD,
-  PROP_APPLICATION_CONTEXT,
+  PROP_DEVOUT,
+  PROP_MAIN,
 };
 
 static gpointer ags_window_parent_class = NULL;
@@ -123,22 +126,22 @@ ags_window_class_init(AgsWindowClass *window)
   gobject->finalize = ags_window_finalize;
 
   /* properties */
-  param_spec = g_param_spec_object("soundcard\0",
-				   "assigned soundcard\0",
-				   "The soundcard it is assigned with\0",
+  param_spec = g_param_spec_object("devout\0",
+				   "assigned devout\0",
+				   "The devout it is assigned with\0",
 				   G_TYPE_OBJECT,
 				   G_PARAM_READABLE | G_PARAM_WRITABLE);
   g_object_class_install_property(gobject,
-				  PROP_SOUNDCARD,
+				  PROP_DEVOUT,
 				  param_spec);
 
-  param_spec = g_param_spec_object("application-context\0",
-				   "assigned application_context\0",
-				   "The AgsApplicationContext it is assigned with\0",
+  param_spec = g_param_spec_object("ags-main\0",
+				   "assigned ags_main\0",
+				   "The AgsMain it is assigned with\0",
 				   G_TYPE_OBJECT,
 				   G_PARAM_READABLE | G_PARAM_WRITABLE);
   g_object_class_install_property(gobject,
-				  PROP_APPLICATION_CONTEXT,
+				  PROP_MAIN,
 				  param_spec);
 
 
@@ -169,17 +172,16 @@ ags_window_init(AgsWindow *window)
 
   error = NULL;
   
-  window->name = g_strdup("unnamed\0");
   g_object_set(G_OBJECT(window),
-  	       "icon\0", gdk_pixbuf_new_from_file("./doc/images/jumper.png\0", &error),
+  	       "icon\0", gdk_pixbuf_new_from_file(g_strdup_printf("%s%s\0", DESTDIR, "/gsequencer/icons/jumper.png\0"), &error),
   	       NULL);
 
-  window->application_context = NULL;
-  window->application_mutex = NULL;
-  
-  window->soundcard = NULL;
+  window->ags_main = NULL;
+  window->devout = NULL;
 
-  gtk_window_set_title((GtkWindow *) window, g_strconcat("ags - \0", window->name, NULL));
+  window->name = g_strdup("unnamed\0");
+
+  gtk_window_set_title((GtkWindow *) window, g_strconcat("GSequencer - \0", window->name, NULL));
 
   vbox = (GtkVBox *) gtk_vbox_new(FALSE, 0);
   gtk_container_add((GtkContainer *) window, (GtkWidget*) vbox);
@@ -193,29 +195,30 @@ ags_window_init(AgsWindow *window)
   gtk_box_pack_start((GtkBox*) vbox, (GtkWidget*) window->paned, TRUE, TRUE, 0);
 
   scrolled_window = (GtkWidget *) gtk_scrolled_window_new(NULL, NULL);
-  gtk_paned_add1((GtkPaned *) window->paned,
-		 scrolled_window);
+  gtk_paned_pack1((GtkPaned *) window->paned,
+		  scrolled_window,
+		  TRUE, TRUE);
 
   window->machines = (GtkVBox *) gtk_vbox_new(FALSE, 0);
   gtk_scrolled_window_add_with_viewport((GtkScrolledWindow *) scrolled_window,
 					(GtkWidget *) window->machines);
-  window->editor = ags_editor_new();
-  gtk_paned_add2((GtkPaned *) window->paned,
-  		 (GtkWidget *) window->editor);
+  window->editor = g_object_new(AGS_TYPE_EDITOR,
+				"homogeneous\0", FALSE,
+				"spacing\0", 0,
+				NULL);
+  gtk_paned_pack2((GtkPaned *) window->paned,
+		  (GtkWidget *) window->editor,
+		  TRUE, TRUE);
 
-  window->navigation = ags_navigation_new();
+  window->navigation = g_object_new(AGS_TYPE_NAVIGATION,
+				    "homogeneous\0", FALSE,
+				    "spacing\0", 0,
+				    NULL);
   gtk_box_pack_start((GtkBox *) vbox,
 		     (GtkWidget *) window->navigation,
 		     FALSE, FALSE, 0);
 
-  window->automation_window = ags_automation_window_new(window);
-
   window->export_window = ags_export_window_new();
-  window->export_window->parent = window;
-
-  window->import_window = ags_midi_import_wizard_new();
-  AGS_MIDI_IMPORT_WIZARD(window->import_window)->parent = window;
-
   window->preferences = NULL;
 
   window->machine_counter = ags_window_standard_machine_counter();
@@ -234,55 +237,55 @@ ags_window_set_property(GObject *gobject,
   window = AGS_WINDOW(gobject);
 
   switch(prop_id){
-  case PROP_SOUNDCARD:
+  case PROP_DEVOUT:
     {
-      GObject *soundcard;
+      AgsDevout *devout;
 
-      soundcard = g_value_get_object(value);
+      devout = g_value_get_object(value);
 
-      if(window->soundcard == soundcard)
+      if(window->devout == devout)
 	return;
 
-      if(soundcard != NULL)
-	g_object_ref(soundcard);
+      if(devout != NULL)
+	g_object_ref(devout);
 
-      window->soundcard = soundcard;
+      window->devout = devout;
 
       g_object_set(G_OBJECT(window->editor),
-		   "soundcard\0", soundcard,
+		   "devout\0", devout,
 		   NULL);
 
       g_object_set(G_OBJECT(window->navigation),
-		   "soundcard\0", soundcard,
+		   "devout\0", devout,
 		   NULL);
 
       g_object_set(G_OBJECT(window->export_window),
-		   "soundcard\0", soundcard,
+		   "devout\0", devout,
 		   NULL);
     }
     break;
-  case PROP_APPLICATION_CONTEXT:
+  case PROP_MAIN:
     {
-      AgsApplicationContext *application_context;
+      AgsMain *ags_main;
 
-      application_context = g_value_get_object(value);
+      ags_main = (AgsMain *) g_value_get_object(value);
 
-      if(window->application_context == application_context)
+      if((AgsMain *) window->ags_main == ags_main)
 	return;
 
-      if(window->application_context != NULL){
-	g_object_unref(window->application_context);
+      if(window->ags_main != NULL){
+	g_object_unref(window->ags_main);
       }
 
-      if(application_context != NULL){
-	g_object_ref(application_context);
-
-	window->application_mutex = application_context->mutex;
-      }else{
-	window->application_mutex = NULL;
+      if(ags_main != NULL){
+	g_object_ref(ags_main);
       }
 
-      window->application_context = application_context;
+      window->ags_main = (GObject *) ags_main;
+
+      g_object_set(G_OBJECT(window->export_window),
+		   "ags-main\0", ags_main,
+		   NULL);
     }
     break;
   default:
@@ -302,15 +305,11 @@ ags_window_get_property(GObject *gobject,
   window = AGS_WINDOW(gobject);
 
   switch(prop_id){
-  case PROP_SOUNDCARD:
-    {
-      g_value_set_object(value, window->soundcard);
-    }
+  case PROP_DEVOUT:
+    g_value_set_object(value, window->devout);
     break;
-  case PROP_APPLICATION_CONTEXT:
-    {
-      g_value_set_object(value, window->application_context);
-    }
+  case PROP_MAIN:
+    g_value_set_object(value, window->ags_main);
     break;
   default:
     G_OBJECT_WARN_INVALID_PROPERTY_ID(gobject, prop_id, param_spec);
@@ -332,7 +331,7 @@ ags_window_connect(AgsConnectable *connectable)
   ags_connectable_connect(AGS_CONNECTABLE(window->menu_bar));
 
   list_start = 
-    list = gtk_container_get_children(window->machines);
+    list = gtk_container_get_children((GtkContainer *) window->machines);
 
   while(list != NULL){
     ags_connectable_connect(AGS_CONNECTABLE(list->data));
@@ -344,8 +343,6 @@ ags_window_connect(AgsConnectable *connectable)
   
   ags_connectable_connect(AGS_CONNECTABLE(window->editor));
   ags_connectable_connect(AGS_CONNECTABLE(window->navigation));
-
-  ags_connectable_connect(AGS_CONNECTABLE(window->automation_window));
 
   ags_connectable_connect(AGS_CONNECTABLE(window->export_window));
   ags_connectable_connect(AGS_CONNECTABLE(window->import_window));
@@ -365,7 +362,7 @@ ags_window_finalize(GObject *gobject)
 
   window = (AgsWindow *) gobject;
 
-  g_object_unref(G_OBJECT(window->soundcard));
+  g_object_unref(G_OBJECT(window->devout));
   g_object_unref(G_OBJECT(window->export_window));
 
   free(window->name);
@@ -378,11 +375,11 @@ ags_window_show(GtkWidget *widget)
 {
   AgsWindow *window;
 
-  GTK_WIDGET_CLASS(ags_window_parent_class)->show(widget);
-
   window = (AgsWindow *) widget;
 
   gtk_widget_show((GtkWidget *) window->menu_bar);
+
+  GTK_WIDGET_CLASS(ags_window_parent_class)->show(widget);
 }
 
 gboolean
@@ -522,7 +519,7 @@ ags_machine_counter_alloc(gchar *version, gchar *build_id,
 
 /**
  * ags_window_new:
- * @application_context: the application object.
+ * @ags_main: the application object.
  *
  * Creates an #AgsWindow
  *
@@ -531,12 +528,12 @@ ags_machine_counter_alloc(gchar *version, gchar *build_id,
  * Since: 0.3
  */
 AgsWindow*
-ags_window_new(GObject *application_context)
+ags_window_new(GObject *ags_main)
 {
   AgsWindow *window;
 
   window = (AgsWindow *) g_object_new(AGS_TYPE_WINDOW,
-				      "application-context\0", application_context,
+				      "ags-main", ags_main,
 				      NULL);
 
   return(window);

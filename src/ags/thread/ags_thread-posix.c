@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/thread/ags_thread-posix.h>
@@ -24,6 +25,9 @@
 
 #include <ags/thread/ags_task_thread.h>
 #include <ags/thread/ags_returnable_thread.h>
+#include <ags/thread/ags_audio_thread.h>
+
+#include <ags/audio/ags_devout.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -68,6 +72,7 @@ void ags_thread_real_stop(AgsThread *thread);
 enum{
   PROP_0,
   PROP_FREQUENCY,
+  PROP_DEVOUT,
 };
 
 enum{
@@ -140,6 +145,22 @@ ags_thread_class_init(AgsThreadClass *thread)
   gobject->finalize = ags_thread_finalize;
 
   /* properties */
+  /**
+   * AgsThread:devout:
+   *
+   * The assigned #AgsDevout.
+   * 
+   * Since: 0.4
+   */
+  param_spec = g_param_spec_object("devout\0",
+				   "devout assigned to\0",
+				   "The AgsDevout it is assigned to.\0",
+				   AGS_TYPE_DEVOUT,
+				   G_PARAM_WRITABLE);
+  g_object_class_install_property(gobject,
+				  PROP_DEVOUT,
+				  param_spec);
+
   /**
    * AgsThread:frequency:
    *
@@ -276,6 +297,11 @@ ags_thread_init(AgsThread *thread)
 {
   g_atomic_int_set(&(thread->flags),
 		   0);
+  thread->rt_setup = FALSE;
+
+  thread->devout = NULL;
+  
+  thread->thread = (pthread_t *) malloc(sizeof(pthread_t));
 
   thread->thread = (pthread_t *) malloc(sizeof(pthread_t));
 
@@ -349,6 +375,34 @@ ags_thread_set_property(GObject *gobject,
   thread = AGS_THREAD(gobject);
 
   switch(prop_id){
+  case PROP_DEVOUT:
+    {
+      AgsDevout *devout;
+      AgsThread *current;
+
+      devout = (AgsDevout *) g_value_get_object(value);
+
+      if(thread->devout != NULL){
+	g_object_unref(G_OBJECT(thread->devout));
+      }
+
+      if(devout != NULL){
+	g_object_ref(G_OBJECT(devout));
+      }
+
+      thread->devout = G_OBJECT(devout);
+
+      current = thread->children;
+
+      while(current != NULL){
+	g_object_set(G_OBJECT(current),
+		     "devout\0", devout,
+		     NULL);
+
+	current = current->next;
+      }
+    }
+    break;
   case PROP_FREQUENCY:
     {
       gdouble freq;
@@ -379,6 +433,11 @@ ags_thread_get_property(GObject *gobject,
   thread = AGS_THREAD(gobject);
 
   switch(prop_id){
+  case PROP_DEVOUT:
+    {
+      g_value_set_object(value, G_OBJECT(thread->devout));
+    }
+    break;
   case PROP_FREQUENCY:
     {
       g_value_set_double(value, thread->freq);
@@ -428,6 +487,10 @@ ags_thread_finalize(GObject *gobject)
   size_t stacksize;
 
   thread = AGS_THREAD(gobject);
+
+  if(thread->devout != NULL){
+    g_object_unref(G_OBJECT(thread->devout));
+  }
 
   pthread_attr_getstack(&(thread->thread_attr),
 			&stackaddr, &stacksize);
@@ -860,6 +923,25 @@ ags_thread_remove_child(AgsThread *thread, AgsThread *child)
 void
 ags_thread_add_child(AgsThread *thread, AgsThread *child)
 {
+  ags_thread_add_child_extended(thread, child,
+				FALSE, TRUE);
+}
+
+/**
+ * ags_thread_add_child:
+ * @thread: an #AgsThread
+ * @child: the child to remove
+ * @no_start: don't start thread
+ * @no_wait: don't wait until started
+ * 
+ * Add child to thread.
+ *
+ * Since: 0.4.2
+ */
+void
+ags_thread_add_child_extended(AgsThread *thread, AgsThread *child,
+			      gboolean no_start, gboolean no_wait)
+{
   AgsThread *main_loop;
 
   if(thread == NULL || child == NULL){
@@ -890,10 +972,31 @@ ags_thread_add_child(AgsThread *thread, AgsThread *child)
 
   ags_thread_unlock(main_loop);
     
-  if((AGS_THREAD_RUNNING & (g_atomic_int_get(&(thread->flags)))) != 0){
-    guint val;
-    
-    ags_thread_start(child);
+  if(!no_start){
+    if((AGS_THREAD_RUNNING & (g_atomic_int_get(&(thread->flags)))) != 0){
+      /* start child */
+      ags_thread_start(child);
+
+      if(!no_wait){
+	guint val;
+
+	/* wait child */
+	pthread_mutex_lock(child->start_mutex);
+
+	val = g_atomic_int_get(&(child->flags));
+
+	if((AGS_THREAD_INITIAL_RUN & val) != 0){
+	  while((AGS_THREAD_INITIAL_RUN & val) != 0){
+	    pthread_cond_wait(child->start_cond,
+			      child->start_mutex);
+
+	    val = g_atomic_int_get(&(child->flags));
+	  }
+	}
+	
+	pthread_mutex_unlock(child->start_mutex);
+      }
+    }
   }
 }
 
@@ -1018,7 +1121,7 @@ ags_thread_is_current_ready(AgsThread *current,
 
   toplevel = ags_thread_get_toplevel(current);
 
-  //  pthread_mutex_lock(&(current->mutex));
+  //  pthread_mutex_lock(current->mutex);
 
   flags = g_atomic_int_get(&(current->flags));
   retval = FALSE;
@@ -1036,7 +1139,7 @@ ags_thread_is_current_ready(AgsThread *current,
   }
 
   if(retval){
-    //    pthread_mutex_unlock(&(current->mutex));
+    //    pthread_mutex_unlock(current->mutex);
 
     return(TRUE);
   }
@@ -1069,7 +1172,7 @@ ags_thread_is_current_ready(AgsThread *current,
     break;
   }
 
-  //  pthread_mutex_unlock(&(current->mutex));
+  //  pthread_mutex_unlock(current->mutex);
 
   return(retval);
 }
@@ -1091,7 +1194,7 @@ ags_thread_is_tree_ready(AgsThread *thread,
 
     toplevel = ags_thread_get_toplevel(current);
 
-    //  pthread_mutex_lock(&(current->mutex));
+    //  pthread_mutex_lock(current->mutex);
 
     flags = g_atomic_int_get(&(current->flags));
     retval = FALSE;
@@ -1109,7 +1212,7 @@ ags_thread_is_tree_ready(AgsThread *thread,
     }
 
     if(retval){
-      //    pthread_mutex_unlock(&(current->mutex));
+      //    pthread_mutex_unlock(current->mutex);
 
       return(TRUE);
     }
@@ -1142,7 +1245,7 @@ ags_thread_is_tree_ready(AgsThread *thread,
       break;
     }
 
-    //  pthread_mutex_unlock(&(current->mutex));
+    //  pthread_mutex_unlock(current->mutex);
     return(retval);
   }
   gboolean ags_thread_is_tree_ready_recursive(AgsThread *current){
@@ -1754,7 +1857,8 @@ ags_thread_real_start(AgsThread *thread)
   }
 
   main_loop = AGS_MAIN_LOOP(ags_thread_get_toplevel(thread));
-
+  thread->rt_setup = FALSE;
+  
 #ifdef AGS_DEBUG
   g_message("thread start: %s\0", G_OBJECT_TYPE_NAME(thread));
 #endif
@@ -1884,7 +1988,7 @@ ags_thread_loop(void *ptr)
   g_atomic_int_or(&(thread->flags),
 		  (AGS_THREAD_RUNNING |
 		   AGS_THREAD_INITIAL_RUN));
-  
+
   running = g_atomic_int_get(&(thread->flags));
 
   if(thread->freq >= 1.0){
@@ -1947,8 +2051,8 @@ ags_thread_loop(void *ptr)
 	  g_atomic_int_and(&(thread->flags),
 			   (~AGS_THREAD_INITIAL_RUN));
 
-	  pthread_cond_signal(thread->start_cond);
-
+	  pthread_cond_broadcast(thread->start_cond);
+	  
 	  pthread_mutex_unlock(thread->mutex);
 	}else{
 	  /* run in hierarchy */
@@ -1960,7 +2064,6 @@ ags_thread_loop(void *ptr)
 	}
 
 	//	pthread_yield();
-
 	continue;
       }else{
 	counter = 0;
@@ -1977,7 +2080,7 @@ ags_thread_loop(void *ptr)
 			   (~AGS_THREAD_WAIT_0));
 
 	  /* signal AgsAudioLoop */
-	  pthread_cond_signal(thread->start_cond);
+	  pthread_cond_broadcast(thread->start_cond);
 	}else{
 	  /* run in hierarchy */
 	  pthread_mutex_lock(thread->mutex);

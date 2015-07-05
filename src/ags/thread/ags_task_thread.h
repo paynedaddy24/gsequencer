@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef __AGS_TASK_THREAD_H__
@@ -51,6 +52,9 @@ struct _AgsTaskThread
 
   guint flags;
 
+  GMutex mutex;
+  GCond cond;
+
   pthread_mutex_t *read_mutex;
   pthread_mutex_t *launch_mutex;
 
@@ -59,6 +63,8 @@ struct _AgsTaskThread
 
   volatile GList *exec;
   volatile GList *queue;
+
+  AgsThreadPool *thread_pool;
 };
 
 struct _AgsTaskThreadClass
@@ -77,6 +83,6 @@ GType ags_task_thread_get_type();
 void ags_task_thread_append_task(AgsTaskThread *task_thread, AgsTask *task);
 void ags_task_thread_append_tasks(AgsTaskThread *task_thread, GList *list);
 
-AgsTaskThread* ags_task_thread_new();
+AgsTaskThread* ags_task_thread_new(GObject *devout);
 
 #endif /*__AGS_TASK_THREAD_H__*/

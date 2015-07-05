@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef __AGS_AUDIO_H__
@@ -35,16 +36,16 @@ typedef struct _AgsAudio AgsAudio;
 typedef struct _AgsAudioClass AgsAudioClass;
 
 typedef enum{
-  AGS_AUDIO_CONNECTED                   = 1,
-  AGS_AUDIO_OUTPUT_HAS_RECYCLING        = 1 <<  1,
-  AGS_AUDIO_INPUT_HAS_RECYCLING         = 1 <<  2,
-  AGS_AUDIO_INPUT_TAKES_FILE            = 1 <<  3,
-  AGS_AUDIO_HAS_NOTATION                = 1 <<  4,
-  AGS_AUDIO_SYNC                        = 1 <<  5, // can be combined with below
-  AGS_AUDIO_ASYNC                       = 1 <<  6,
-  AGS_AUDIO_RUNNING                     = 1 <<  7,
-  AGS_AUDIO_PLAYING                     = 1 <<  8,
-  AGS_AUDIO_NOTATION_DEFAULT            = 1 <<  9,
+  AGS_AUDIO_OUTPUT_HAS_RECYCLING        = 1,
+  AGS_AUDIO_INPUT_HAS_RECYCLING         = 1 <<  1,
+  AGS_AUDIO_INPUT_TAKES_FILE            = 1 <<  2,
+  AGS_AUDIO_HAS_NOTATION                = 1 <<  3,
+  AGS_AUDIO_SYNC                        = 1 <<  4, // can be combined with below
+  AGS_AUDIO_ASYNC                       = 1 <<  5,
+  AGS_AUDIO_RUNNING                     = 1 <<  6,
+  AGS_AUDIO_PLAYING                     = 1 <<  7,
+  AGS_AUDIO_NOTATION_DEFAULT            = 1 <<  8,
+  AGS_AUDIO_REVERSE_MAPPING             = 1 <<  9,
 }AgsAudioFlags;
 
 struct _AgsAudio
@@ -53,7 +54,7 @@ struct _AgsAudio
 
   guint flags;
 
-  GObject *soundcard;
+  GObject *devout;
   guint level;
   
   guint sequence_length;
@@ -72,8 +73,7 @@ struct _AgsAudio
   GObject *playback_domain;
 
   GList *notation;
-  GList *automation;
-  
+
   GList *recall_id;
   GList *recycling_context;
 
@@ -116,23 +116,13 @@ void ags_audio_done(AgsAudio *audio, AgsRecallID *recall_id);
 
 void ags_audio_set_sequence_length(AgsAudio *audio, guint sequence_length);
 
-void ags_audio_set_soundcard(AgsAudio *audio, GObject *soundcard);
+void ags_audio_set_devout(AgsAudio *audio, GObject *devout);
 
-void ags_audio_add_notation(AgsAudio *audio,
-			      GObject *notation);
-void ags_audio_remove_notation(AgsAudio *audio,
-			       GObject *notation);
-
-void ags_audio_add_automation(AgsAudio *audio,
-			      GObject *automation);
-void ags_audio_remove_automation(AgsAudio *audio,
-				 GObject *automation);
+void ags_audio_add_recycling_container(AgsAudio *audio, GObject *recycling_container);
+void ags_audio_remove_recycling_container(AgsAudio *audio, GObject *recycling_container);
 
 void ags_audio_add_recall_id(AgsAudio *audio, GObject *recall_id);
 void ags_audio_remove_recall_id(AgsAudio *audio, GObject *recall_id);
-
-void ags_audio_add_recycling_context(AgsAudio *audio, GObject *recycling_context);
-void ags_audio_remove_recycling_context(AgsAudio *audio, GObject *recycling_context);
 
 void ags_audio_add_recall_container(AgsAudio *audio, GObject *recall_container);
 void ags_audio_remove_recall_container(AgsAudio *audio, GObject *recall_container);
@@ -170,6 +160,6 @@ void ags_audio_open_files(AgsAudio *audio,
 
 GList* ags_audio_find_port(AgsAudio *audio);
 
-AgsAudio* ags_audio_new(GObject *soundcard);
+AgsAudio* ags_audio_new();
 
 #endif /*__AGS_AUDIO_H__*/

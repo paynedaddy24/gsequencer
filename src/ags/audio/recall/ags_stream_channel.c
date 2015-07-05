@@ -1,28 +1,29 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/audio/recall/ags_stream_channel.h>
 
-#include <ags/object/ags_application_context.h>
-#include <ags/object/ags_config.h>
-#include <ags/object/ags_connectable.h>
+#include <ags-lib/object/ags_connectable.h>
+
+#include <ags/main.h>
+
 #include <ags/object/ags_plugin.h>
-#include <ags/object/ags_soundcard.h>
 
 void ags_stream_channel_class_init(AgsStreamChannelClass *stream_channel);
 void ags_stream_channel_connectable_interface_init(AgsConnectableInterface *connectable);
@@ -59,6 +60,8 @@ enum{
 static gpointer ags_stream_channel_parent_class = NULL;
 static AgsConnectableInterface *ags_stream_channel_parent_connectable_interface;
 static AgsPluginInterface *ags_stream_channel_parent_plugin_interface;
+
+extern AgsConfig *config;
 
 static const gchar *ags_stream_channel_plugin_name = "ags-stream\0";
 static const gchar *ags_stream_channel_plugin_specifier[] = {
@@ -167,8 +170,8 @@ ags_stream_channel_init(AgsStreamChannel *stream_channel)
   GList *port;
 
   AGS_RECALL(stream_channel)->name = "ags-stream\0";
-  AGS_RECALL(stream_channel)->version = AGS_RECALL_DEFAULT_VERSION;
-  AGS_RECALL(stream_channel)->build_id = AGS_RECALL_DEFAULT_BUILD_ID;
+  AGS_RECALL(stream_channel)->version = AGS_EFFECTS_DEFAULT_VERSION;
+  AGS_RECALL(stream_channel)->build_id = AGS_BUILD_ID;
   AGS_RECALL(stream_channel)->xml_type = "ags-stream-channel\0";
 
   port = NULL;
@@ -182,7 +185,10 @@ ags_stream_channel_init(AgsStreamChannel *stream_channel)
 				     "port-value-size\0", sizeof(gboolean),
 				     "port-value-length\0", 1,
 				     NULL);
-  stream_channel->auto_sense->port_value.ags_port_boolean = TRUE;
+  stream_channel->auto_sense->port_value.ags_port_boolean = ((!g_strcmp0(ags_config_get(config,
+											AGS_CONFIG_RECALL,
+											"auto-sense\0"), "true\0")
+							      ) ? TRUE: FALSE);
   
   port = g_list_prepend(port, stream_channel->auto_sense);
 
@@ -270,6 +276,10 @@ ags_stream_channel_finalize(GObject *gobject)
 void
 ags_stream_channel_connect(AgsConnectable *connectable)
 {
+  if((AGS_RECALL_CONNECTED & (AGS_RECALL(connectable)->flags)) != 0){
+    return;
+  }
+
   ags_stream_channel_parent_connectable_interface->connect(connectable);
 
   /* empty */

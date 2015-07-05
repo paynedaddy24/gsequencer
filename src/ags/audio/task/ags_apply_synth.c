@@ -1,30 +1,31 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/audio/task/ags_apply_synth.h>
 
-#include <ags/object/ags_config.h>
-#include <ags/object/ags_connectable.h>
-#include <ags/object/ags_soundcard.h>
+#include <ags-lib/object/ags_connectable.h>
 
 #include <ags/audio/ags_audio.h>
 #include <ags/audio/ags_audio_signal.h>
 #include <ags/audio/ags_synths.h>
+
+#include <ags/audio/ags_config.h>
 
 #include <math.h>
 
@@ -36,6 +37,8 @@ void ags_apply_synth_disconnect(AgsConnectable *connectable);
 void ags_apply_synth_finalize(GObject *gobject);
 
 void ags_apply_synth_launch(AgsTask *task);
+
+extern AgsConfig *config;
 
 /**
  * SECTION:ags_apply_synth
@@ -159,10 +162,10 @@ ags_apply_synth_finalize(GObject *gobject)
 void
 ags_apply_synth_launch(AgsTask *task)
 {
+  AgsDevout *devout;
   AgsApplySynth *apply_synth;
   AgsChannel *channel;
   AgsAudioSignal *audio_signal;
-  GObject *soundcard;
   GList *stream;
   gint wave;
   guint attack, frame_count, stop, phase, frequency;
@@ -186,20 +189,20 @@ ags_apply_synth_launch(AgsTask *task)
 				    double volume){
     switch(wave){
     case AGS_APPLY_SYNTH_SIN:
-      ags_synth_sin(soundcard, (signed short *) stream->data,
+      ags_synth_sin(devout, (signed short *) stream->data,
 		    offset, frequency, phase, frame_count,
 		    volume);
       break;
     case AGS_APPLY_SYNTH_SAW:
-      ags_synth_saw(soundcard, (signed short *) stream->data,
+      ags_synth_saw(devout, (signed short *) stream->data,
 		    offset, frequency, phase, frame_count,
 		    volume);
       break;
     case AGS_APPLY_SYNTH_SQUARE:
-      ags_synth_square(soundcard, (signed short *) stream->data, offset, frequency, phase, frame_count, volume);
+      ags_synth_square(devout, (signed short *) stream->data, offset, frequency, phase, frame_count, volume);
       break;
     case AGS_APPLY_SYNTH_TRIANGLE:
-      ags_synth_triangle(soundcard, (signed short *) stream->data, offset, frequency, phase, frame_count, volume);
+      ags_synth_triangle(devout, (signed short *) stream->data, offset, frequency, phase, frame_count, volume);
       break;
     default:
       g_warning("ags_apply_synth_launch_write: warning no wave selected\n\0");
@@ -208,12 +211,17 @@ ags_apply_synth_launch(AgsTask *task)
 
   apply_synth = AGS_APPLY_SYNTH(task);
   channel = apply_synth->start_channel;
-  soundcard = AGS_AUDIO(channel->audio)->soundcard;
-  ags_soundcard_get_presets(AGS_SOUNDCARD(soundcard),
-			    NULL,
-			    &samplerate,
-			    &buffer_size,
-			    NULL);
+  devout = AGS_DEVOUT(AGS_AUDIO(channel->audio)->devout);
+  buffer_size = g_ascii_strtoull(ags_config_get(config,
+						AGS_CONFIG_DEVOUT,
+						"buffer-size\0"),
+				 NULL,
+				 10);
+  samplerate = g_ascii_strtoull(ags_config_get(config,
+					       AGS_CONFIG_DEVOUT,
+					       "samplerate\0"),
+				NULL,
+				10);
   
   wave = (gint) apply_synth->wave;
   g_message("wave = %d\n\0", wave);

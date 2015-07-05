@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2014 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/audio/task/ags_resize_audio.h>
@@ -25,6 +26,8 @@
 #include <ags/audio/ags_input.h>
 
 #include <ags/X/ags_machine.h>
+#include <ags/X/ags_pad.h>
+#include <ags/X/ags_line.h>
 
 void ags_resize_audio_class_init(AgsResizeAudioClass *resize_audio);
 void ags_resize_audio_connectable_interface_init(AgsConnectableInterface *connectable);
@@ -151,7 +154,7 @@ ags_resize_audio_launch(AgsTask *task)
 {
   AgsResizeAudio *resize_audio;
   AgsChannel *iter;
-  GList *list;
+  GList *list, *list_start;
   guint pads_old;
   
   resize_audio = AGS_RESIZE_AUDIO(task);
@@ -174,6 +177,21 @@ ags_resize_audio_launch(AgsTask *task)
 	iter = iter->next;
       }
     }
+
+    machine = (AgsMachine *) resize_audio->audio->machine;
+    list_start = 
+      list = gtk_container_get_children(machine->output);
+    list = g_list_nth(list,
+		      pads_old);
+
+    while(list != NULL){
+      ags_connectable_connect(AGS_CONNECTABLE(list->data));
+      gtk_widget_show_all(list->data);
+
+      list = list->next;
+    }
+
+    g_list_free(list_start);
   }
 
   if(resize_audio->audio->input_pads != resize_audio->input_pads){
@@ -193,14 +211,82 @@ ags_resize_audio_launch(AgsTask *task)
 	iter = iter->next;
       }
     }
+
+    machine = (AgsMachine *) resize_audio->audio->machine;
+    list_start = 
+      list = gtk_container_get_children(machine->input);
+    list = g_list_nth(list,
+		      pads_old);
+
+    while(list != NULL){
+      ags_connectable_connect(AGS_CONNECTABLE(list->data));
+      gtk_widget_show_all(list->data);
+
+      list = list->next;
+    }
+
+    g_list_free(list_start);
   }
 
   if(resize_audio->audio->audio_channels != resize_audio->audio_channels){
+    AgsPad *pad;
+    GList *line, *line_start;
+    guint audio_channels_old;
+
+    audio_channels_old = resize_audio->audio->audio_channels;
     ags_audio_set_audio_channels(resize_audio->audio,
 				 resize_audio->audio_channels);
+
+    if(resize_audio->audio_channels > audio_channels_old){
+      machine = (AgsMachine *) resize_audio->audio->machine;
+
+      list_start = 
+	list = gtk_container_get_children(machine->output);
+
+      while(list != NULL){
+	pad = list->data;
+
+	line = g_list_reverse(gtk_container_get_children(pad->expander_set));
+	line = g_list_nth(line,
+			  audio_channels_old);
+
+	while(line != NULL){
+	  ags_connectable_connect(AGS_CONNECTABLE(line->data));
+	  gtk_widget_show_all(line->data);
+	  
+	  line = line->next;
+	}
+
+	list = list->next;
+      }
+      
+      g_list_free(list_start);
+
+      list_start = 
+	list = gtk_container_get_children(machine->input);
+      
+      while(list != NULL){
+	pad = list->data;
+
+	line = g_list_reverse(gtk_container_get_children(pad->expander_set));
+	line = g_list_nth(line,
+			  audio_channels_old);
+
+	while(line != NULL){
+	  ags_connectable_connect(AGS_CONNECTABLE(line->data));
+	  gtk_widget_show_all(line->data);
+	  
+	  line = line->next;
+	}
+
+	list = list->next;
+      }
+
+      g_list_free(list_start);
+    }
   }
 }
-
+  
 /**
  * ags_resize_audio_new:
  * @audio: the #AgsAudio to resize

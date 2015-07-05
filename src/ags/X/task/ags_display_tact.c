@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/X/task/ags_display_tact.h>
@@ -143,20 +144,27 @@ void
 ags_display_tact_launch(AgsTask *task)
 {
   AgsDisplayTact *display_tact;
+  AgsWindow *window;
   AgsNavigation *navigation;
   gchar *timestr;
+  gdouble tact;
 
   display_tact = AGS_DISPLAY_TACT(task);
   
   navigation = AGS_NAVIGATION(display_tact->navigation);
+  window = gtk_widget_get_ancestor(navigation,
+				   AGS_TYPE_WINDOW);
+  
+  tact = window->devout->tact_counter - navigation->start_tact;
 
-  //  gtk_adjustment_set_value(navigation->position_tact->adjustment,
-  //			   navigation->position_tact->adjustment->value + (exp2(-4.0)));
-
-  timestr = ags_navigation_tact_to_time_string(navigation->position_tact->adjustment->value,
-					       navigation->bpm->adjustment->value);
+  timestr = ags_navigation_relative_tact_to_time_string(navigation->duration_time->label,
+							1.0 * window->devout->bpm / 60.0, //window->devout->delay[window->devout->tic_counter],
+							window->devout->bpm,
+							window->devout->delay_factor);
+  
   gtk_label_set_text(navigation->duration_time, timestr);
-
+  gtk_widget_queue_draw(navigation->duration_time);
+  
   g_free(timestr);
 }
 

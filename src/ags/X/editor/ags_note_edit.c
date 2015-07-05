@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011, 2014 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/X/editor/ags_note_edit.h>
@@ -21,6 +22,11 @@
 
 #include <ags/object/ags_connectable.h>
 
+#include <ags/thread/ags_mutex_manager.h>
+
+#include <ags/audio/recall/ags_count_beats_audio_run.h>
+
+#include <ags/X/ags_window.h>
 #include <ags/X/ags_editor.h>
 
 #include <ags/X/editor/ags_note_edit.h>
@@ -30,8 +36,6 @@ void ags_note_edit_connectable_interface_init(AgsConnectableInterface *connectab
 void ags_note_edit_init(AgsNoteEdit *note_edit);
 void ags_note_edit_connect(AgsConnectable *connectable);
 void ags_note_edit_disconnect(AgsConnectable *connectable);
-
-void ags_note_edit_paint(AgsNoteEdit *note_edit);
 
 /**
  * SECTION:ags_note_edit
@@ -44,6 +48,8 @@ void ags_note_edit_paint(AgsNoteEdit *note_edit);
  */
 
 GtkStyle *note_edit_style;
+
+extern pthread_mutex_t ags_application_mutex;
 
 GType
 ags_note_edit_get_type(void)
@@ -99,6 +105,10 @@ void
 ags_note_edit_init(AgsNoteEdit *note_edit)
 {
   GtkAdjustment *adjustment;
+
+  note_edit->key_mask = 0;
+  
+  adjustment = (GtkAdjustment *) gtk_adjustment_new(0.0, 0.0, 1.0, 1.0, 1.0, 1.0);
   
   note_edit->flags = 0;
 
@@ -113,14 +123,19 @@ ags_note_edit_init(AgsNoteEdit *note_edit)
 
   note_edit->drawing_area = (GtkDrawingArea *) gtk_drawing_area_new();
   gtk_widget_set_style((GtkWidget *) note_edit->drawing_area, note_edit_style);
-  gtk_widget_set_events (GTK_WIDGET (note_edit->drawing_area), GDK_EXPOSURE_MASK
-                         | GDK_LEAVE_NOTIFY_MASK
-                         | GDK_BUTTON_PRESS_MASK
-			 | GDK_BUTTON_RELEASE_MASK
-                         | GDK_POINTER_MOTION_MASK
-			 | GDK_POINTER_MOTION_HINT_MASK
-			 );
-
+  gtk_widget_set_events(GTK_WIDGET(note_edit->drawing_area), GDK_EXPOSURE_MASK
+			| GDK_LEAVE_NOTIFY_MASK
+			| GDK_BUTTON_PRESS_MASK
+			| GDK_BUTTON_RELEASE_MASK
+			| GDK_POINTER_MOTION_MASK
+			| GDK_POINTER_MOTION_HINT_MASK
+			| GDK_CONTROL_MASK
+			| GDK_KEY_PRESS_MASK
+			| GDK_KEY_RELEASE_MASK
+			);
+  gtk_widget_set_can_focus(note_edit->drawing_area,
+			   TRUE);
+  
   gtk_table_attach(GTK_TABLE(note_edit),
 		   (GtkWidget *) note_edit->drawing_area,
 		   0, 1,
@@ -133,7 +148,7 @@ ags_note_edit_init(AgsNoteEdit *note_edit)
 
   note_edit->width = 0;
   note_edit->height = 0;
-  note_edit->map_width = AGS_NOTE_EDIT_MAX_CONTROLS * 64;
+  note_edit->map_width = AGS_NOTE_EDIT_MAX_CONTROLS * 16 * 64;
   note_edit->map_height = 78;
 
   note_edit->control_height = 14;
@@ -171,7 +186,7 @@ ags_note_edit_init(AgsNoteEdit *note_edit)
   note_edit->selected_y = 0;
 
   /* GtkScrollbars */
-  adjustment = (GtkAdjustment *) gtk_adjustment_new(0.0, 0.0, 1.0, 1.0, 1.0, 1.0);
+  adjustment = (GtkAdjustment *) gtk_adjustment_new(0.0, 0.0, 1.0, 1.0, 16.0, 1.0);
   note_edit->vscrollbar = (GtkVScrollbar *) gtk_vscrollbar_new(adjustment);
   gtk_table_attach(GTK_TABLE(note_edit),
 		   (GtkWidget *) note_edit->vscrollbar,
@@ -180,7 +195,7 @@ ags_note_edit_init(AgsNoteEdit *note_edit)
 		   GTK_FILL, GTK_FILL,
 		   0, 0);
 
-  adjustment = (GtkAdjustment *) gtk_adjustment_new(0.0, 0.0, 1.0, 1.0, 1.0, 1.0);
+  adjustment = (GtkAdjustment *) gtk_adjustment_new(0.0, 0.0, 1.0, 1.0, (gdouble) note_edit->control_current.control_width, 1.0);
   note_edit->hscrollbar = (GtkHScrollbar *) gtk_hscrollbar_new(adjustment);
   gtk_table_attach(GTK_TABLE(note_edit),
 		   (GtkWidget *) note_edit->hscrollbar,
@@ -193,31 +208,47 @@ ags_note_edit_init(AgsNoteEdit *note_edit)
 void
 ags_note_edit_connect(AgsConnectable *connectable)
 {
+  AgsEditor *editor;
   AgsNoteEdit *note_edit;
 
   note_edit = AGS_NOTE_EDIT(connectable);
 
+  editor = (AgsEditor *) gtk_widget_get_ancestor(GTK_WIDGET(note_edit),
+						 AGS_TYPE_EDITOR);
+
+  if(editor != NULL && editor->selected_machine != NULL){
+    g_signal_connect(editor->selected_machine->audio, "set-audio-channels\0",
+		     G_CALLBACK(ags_note_edit_set_audio_channels_callback), note_edit);
+    g_signal_connect(editor->selected_machine->audio, "set-pads\0",
+		     G_CALLBACK(ags_note_edit_set_pads_callback), note_edit);
+  }
+  
   g_signal_connect_after((GObject *) note_edit->drawing_area, "expose_event\0",
-			 G_CALLBACK (ags_note_edit_drawing_area_expose_event), (gpointer) note_edit);
+			 G_CALLBACK(ags_note_edit_drawing_area_expose_event), (gpointer) note_edit);
 
   g_signal_connect_after((GObject *) note_edit->drawing_area, "configure_event\0",
-			 G_CALLBACK (ags_note_edit_drawing_area_configure_event), (gpointer) note_edit);
+			 G_CALLBACK(ags_note_edit_drawing_area_configure_event), (gpointer) note_edit);
 
   g_signal_connect((GObject *) note_edit->drawing_area, "button_press_event\0",
-		   G_CALLBACK (ags_note_edit_drawing_area_button_press_event), (gpointer) note_edit);
+		   G_CALLBACK(ags_note_edit_drawing_area_button_press_event), (gpointer) note_edit);
 
   g_signal_connect((GObject *) note_edit->drawing_area, "button_release_event\0",
-		   G_CALLBACK (ags_note_edit_drawing_area_button_release_event), (gpointer) note_edit);
+		   G_CALLBACK(ags_note_edit_drawing_area_button_release_event), (gpointer) note_edit);
 
   g_signal_connect((GObject *) note_edit->drawing_area, "motion_notify_event\0",
-		   G_CALLBACK (ags_note_edit_drawing_area_motion_notify_event), (gpointer) note_edit);
+		   G_CALLBACK(ags_note_edit_drawing_area_motion_notify_event), (gpointer) note_edit);
+			
+  g_signal_connect((GObject *) note_edit->drawing_area, "key_press_event\0",
+		   G_CALLBACK(ags_note_edit_drawing_area_key_press_event), (gpointer) note_edit);
+
+  g_signal_connect((GObject *) note_edit->drawing_area, "key_release_event\0",
+		     G_CALLBACK(ags_note_edit_drawing_area_key_release_event), (gpointer) note_edit);
 
   g_signal_connect_after((GObject *) note_edit->vscrollbar, "value-changed\0",
-			 G_CALLBACK (ags_note_edit_vscrollbar_value_changed), (gpointer) note_edit);
+			 G_CALLBACK(ags_note_edit_vscrollbar_value_changed), (gpointer) note_edit);
 
   g_signal_connect_after((GObject *) note_edit->hscrollbar, "value-changed\0",
-			 G_CALLBACK (ags_note_edit_hscrollbar_value_changed), (gpointer) note_edit);
-
+			 G_CALLBACK(ags_note_edit_hscrollbar_value_changed), (gpointer) note_edit);
 }
 
 void
@@ -261,12 +292,24 @@ ags_note_edit_set_map_height(AgsNoteEdit *note_edit, guint map_height)
 void
 ags_note_edit_reset_vertically(AgsNoteEdit *note_edit, guint flags)
 {
+  AgsWindow *window;
   AgsEditor *editor;
+  double tact_factor, zoom_factor;
+  double tact;
+  gdouble value;
 
   editor = (AgsEditor *) gtk_widget_get_ancestor(GTK_WIDGET(note_edit),
 						 AGS_TYPE_EDITOR);
 
-  if(editor->selected_machine != NULL){
+  window = gtk_widget_get_ancestor(editor,
+				   AGS_TYPE_WINDOW);
+
+  zoom_factor = 0.25;
+
+  tact_factor = exp2(6.0 - (double) gtk_combo_box_get_active((GtkComboBox *) editor->toolbar->zoom));
+  tact = exp2((double) gtk_combo_box_get_active((GtkComboBox *) editor->toolbar->zoom) - 2.0);
+
+  if(editor->selected_machine != NULL && editor->current_edit_widget == note_edit){
     cairo_t *cr;
     gdouble value;
 
@@ -284,7 +327,10 @@ ags_note_edit_reset_vertically(AgsNoteEdit *note_edit, guint flags)
 	height = widget->allocation.height;
 	gtk_adjustment_set_upper(adjustment,
 				 (gdouble) (note_edit->map_height - height));
-	gtk_adjustment_set_value(adjustment, 0.0);
+	
+	if(adjustment->value > adjustment->upper){
+	  gtk_adjustment_set_value(adjustment, adjustment->upper);
+	}
       }else{
 	height = note_edit->map_height;
 	
@@ -318,6 +364,32 @@ ags_note_edit_reset_vertically(AgsNoteEdit *note_edit, guint flags)
 	ags_note_edit_draw_position(note_edit, cr);
       }
 
+      if((AGS_NOTE_EDIT_DRAW_FADER & (note_edit->flags)) != 0){
+	AgsCountBeatsAudioRun *count_beats_audio_run;
+	GList *recall;
+	gdouble position;
+	
+	recall = editor->selected_machine->audio->play;
+
+	while((recall = ags_recall_find_type(recall,
+					     AGS_TYPE_COUNT_BEATS_AUDIO_RUN)) != NULL){
+	  if(AGS_RECALL(recall->data)->recall_id != NULL && (AGS_RECALL_NOTATION & (AGS_RECALL(recall->data)->recall_id->flags)) != 0){
+	    break;
+	  }
+
+	  recall = recall->next;
+	}
+
+	if(recall != NULL){
+	  count_beats_audio_run = AGS_COUNT_BEATS_AUDIO_RUN(recall->data);
+
+	  position = count_beats_audio_run->notation_counter * note_edit->control_unit.control_width;
+	
+	  ags_note_edit_draw_scroll(note_edit, cr,
+				    position);
+	}
+      }
+      
       cairo_pop_group_to_source(cr);
       cairo_paint(cr);
     }
@@ -339,14 +411,15 @@ ags_note_edit_reset_horizontally(AgsNoteEdit *note_edit, guint flags)
   AgsEditor *editor;
   double tact_factor, zoom_factor;
   double tact;
+  gdouble value;
 
   editor = (AgsEditor *) gtk_widget_get_ancestor(GTK_WIDGET(note_edit),
 						 AGS_TYPE_EDITOR);
 
-  zoom_factor = 1.0 / 4.0;
+  zoom_factor = 0.25;
 
-  tact_factor = exp2(8.0 - (double) gtk_combo_box_get_active(editor->toolbar->zoom));
-  tact = exp2((double) gtk_combo_box_get_active(editor->toolbar->zoom) - 4.0);
+  tact_factor = exp2(6.0 - (double) gtk_combo_box_get_active((GtkComboBox *) editor->toolbar->zoom));
+  tact = exp2((double) gtk_combo_box_get_active((GtkComboBox *) editor->toolbar->zoom) - 2.0);
 
   if((AGS_NOTE_EDIT_RESET_WIDTH & flags) != 0){
     note_edit->control_unit.control_width = (guint) (((double) note_edit->control_width * zoom_factor * tact));
@@ -355,96 +428,94 @@ ags_note_edit_reset_horizontally(AgsNoteEdit *note_edit, guint flags)
     note_edit->control_current.control_width = (note_edit->control_width * zoom_factor * tact_factor * tact);
 
     note_edit->map_width = (guint) ((double) note_edit->control_current.control_count * (double) note_edit->control_current.control_width);
-    
+
     /* reset ruler */
     note_edit->ruler->factor = tact_factor;
     note_edit->ruler->precision = tact;
     note_edit->ruler->scale_precision = 1.0 / tact;
 
-    gtk_widget_queue_draw(note_edit->ruler);
+    gtk_widget_queue_draw((GtkWidget *) note_edit->ruler);
   }
 
-  if(editor->selected_machine != NULL){
-    cairo_t *cr;
-    gdouble value;
+  value = GTK_RANGE(note_edit->hscrollbar)->adjustment->value;
 
-    value = GTK_RANGE(note_edit->hscrollbar)->adjustment->value;
+  if((AGS_NOTE_EDIT_RESET_HSCROLLBAR & flags) != 0){
+    GtkWidget *widget;
+    GtkAdjustment *adjustment;
+    guint width;
 
-    if((AGS_NOTE_EDIT_RESET_HSCROLLBAR & flags) != 0){
-      GtkWidget *widget;
+    widget = GTK_WIDGET(note_edit->drawing_area);
+    adjustment = GTK_RANGE(note_edit->hscrollbar)->adjustment;
 
-      GtkAdjustment *adjustment;
+    if(note_edit->map_width > widget->allocation.width){
+      width = widget->allocation.width;
+      //	gtk_adjustment_set_upper(adjustment, (double) (note_edit->map_width - width));
+      gtk_adjustment_set_upper(adjustment,
+			       (gdouble) (note_edit->map_width - width));
+      gtk_adjustment_set_upper(note_edit->ruler->adjustment,
+			       (gdouble) (note_edit->map_width - width) / note_edit->control_current.control_width);
 
-      guint width;
+      if(adjustment->value > adjustment->upper){
+	gtk_adjustment_set_value(adjustment, adjustment->upper);
 
-      widget = GTK_WIDGET(note_edit->drawing_area);
-      adjustment = GTK_RANGE(note_edit->hscrollbar)->adjustment;
-
-      if(note_edit->map_width > widget->allocation.width){
-	width = widget->allocation.width;
-	//	gtk_adjustment_set_upper(adjustment, (double) (note_edit->map_width - width));
-	gtk_adjustment_set_upper(adjustment,
-				 (gdouble) (note_edit->map_width - width));
-	gtk_adjustment_set_upper(note_edit->ruler->adjustment,
-				 (gdouble) (note_edit->map_width - width) / note_edit->control_current.control_width);
-
-	if(adjustment->value > adjustment->upper){
-	  gtk_adjustment_set_value(adjustment, adjustment->upper);
-
-	  /* reset ruler */
-	  gtk_adjustment_set_value(note_edit->ruler->adjustment, note_edit->ruler->adjustment->upper);
-	  gtk_widget_queue_draw(note_edit->ruler);
-	}
-      }else{
-	width = note_edit->map_width;
-
-	gtk_adjustment_set_upper(adjustment, 0.0);
-	gtk_adjustment_set_value(adjustment, 0.0);
-	
 	/* reset ruler */
-	gtk_adjustment_set_upper(note_edit->ruler->adjustment, 0.0);
-	gtk_adjustment_set_value(note_edit->ruler->adjustment, 0.0);
-	gtk_widget_queue_draw(note_edit->ruler);
+	gtk_adjustment_set_value(note_edit->ruler->adjustment, note_edit->ruler->adjustment->upper);
+	gtk_widget_queue_draw((GtkWidget *) note_edit->ruler);
       }
-
-      note_edit->width = width;
-    }
-
-    /* reset AgsNoteEditControlCurrent */
-    if(note_edit->map_width > note_edit->width){
-      note_edit->control_current.x0 = ((guint) round((double) value)) % note_edit->control_current.control_width;
-
-      if(note_edit->control_current.x0 != 0){
-	note_edit->control_current.x0 = note_edit->control_current.control_width - note_edit->control_current.x0;
-      }
-
-      note_edit->control_current.x1 = (note_edit->width - note_edit->control_current.x0) % note_edit->control_current.control_width;
-
-      note_edit->control_current.nth_x = (guint) ceil((double)(value) / (double)(note_edit->control_current.control_width));
     }else{
-      note_edit->control_current.x0 = 0;
-      note_edit->control_current.x1 = 0;
-      note_edit->control_current.nth_x = 0;
+      width = note_edit->map_width;
+
+      gtk_adjustment_set_upper(adjustment, 0.0);
+      gtk_adjustment_set_value(adjustment, 0.0);
+	
+      /* reset ruler */
+      gtk_adjustment_set_upper(note_edit->ruler->adjustment, 0.0);
+      gtk_adjustment_set_value(note_edit->ruler->adjustment, 0.0);
+      gtk_widget_queue_draw((GtkWidget *) note_edit->ruler);
     }
 
-    /* reset AgsNoteEditControlUnit */
-    if(note_edit->map_width > note_edit->width){
-      note_edit->control_unit.x0 = ((guint)round((double) value)) % note_edit->control_unit.control_width;
+    note_edit->width = width;
+  }
 
-      if(note_edit->control_unit.x0 != 0)
-	note_edit->control_unit.x0 = note_edit->control_unit.control_width - note_edit->control_unit.x0;
-      
-      note_edit->control_unit.x1 = (note_edit->width - note_edit->control_unit.x0) % note_edit->control_unit.control_width;
-      
-      note_edit->control_unit.nth_x = (guint) ceil(round((double) value) / (double) (note_edit->control_unit.control_width));
-      note_edit->control_unit.stop_x = note_edit->control_unit.nth_x + (note_edit->width - note_edit->control_unit.x0 - note_edit->control_unit.x1) / note_edit->control_unit.control_width;
-    }else{
-      note_edit->control_unit.x0 = 0;
-      note_edit->control_unit.x1 = 0;
-      note_edit->control_unit.nth_x = 0;
+  /* reset AgsNoteEditControlCurrent */
+  if(note_edit->map_width > note_edit->width){
+    note_edit->control_current.x0 = ((guint) round((double) value)) % note_edit->control_current.control_width;
+
+    if(note_edit->control_current.x0 != 0){
+      note_edit->control_current.x0 = note_edit->control_current.control_width - note_edit->control_current.x0;
     }
+
+    note_edit->control_current.x1 = (note_edit->width - note_edit->control_current.x0) % note_edit->control_current.control_width;
+
+    note_edit->control_current.nth_x = (guint) ceil((double)(value) / (double)(note_edit->control_current.control_width));
+  }else{
+    note_edit->control_current.x0 = 0;
+    note_edit->control_current.x1 = 0;
+    note_edit->control_current.nth_x = 0;
+  }
+
+  /* reset AgsNoteEditControlUnit */
+  if(note_edit->map_width > note_edit->width){
+    note_edit->control_unit.x0 = ((guint)round((double) value)) % note_edit->control_unit.control_width;
+
+    if(note_edit->control_unit.x0 != 0){
+      note_edit->control_unit.x0 = note_edit->control_unit.control_width - note_edit->control_unit.x0;
+    }
+    
+    note_edit->control_unit.x1 = (note_edit->width - note_edit->control_unit.x0) % note_edit->control_unit.control_width;
+      
+    note_edit->control_unit.nth_x = (guint) ceil(round((double) value) / (double) (note_edit->control_unit.control_width));
+    note_edit->control_unit.stop_x = note_edit->control_unit.nth_x + (note_edit->width - note_edit->control_unit.x0 - note_edit->control_unit.x1) / note_edit->control_unit.control_width;
+  }else{
+    note_edit->control_unit.x0 = 0;
+    note_edit->control_unit.x1 = 0;
+    note_edit->control_unit.nth_x = 0;
+  }
 
     /* refresh display */
+  if(editor->selected_machine != NULL){
+    cairo_t *cr;
+
     if(GTK_WIDGET_VISIBLE(editor)){
       gdouble position;
       
@@ -466,6 +537,8 @@ ags_note_edit_reset_horizontally(AgsNoteEdit *note_edit, guint flags)
 
       cairo_pop_group_to_source(cr);
       cairo_paint(cr);
+
+      cairo_destroy(cr);
     }
   }
 }
@@ -514,7 +587,7 @@ ags_note_edit_draw_segment(AgsNoteEdit *note_edit, cairo_t *cr)
   cairo_line_to(cr, (double) note_edit->width, (double) i);
   cairo_stroke(cr);
 
-  tact = exp2((double) gtk_combo_box_get_active(editor->toolbar->zoom) - 4.0);
+  tact = exp2((double) gtk_combo_box_get_active((GtkComboBox *) editor->toolbar->zoom) - 2.0);
 
   i = note_edit->control_current.x0;
   
@@ -596,7 +669,7 @@ ags_note_edit_draw_position(AgsNoteEdit *note_edit, cairo_t *cr)
     if(selected_x + note_edit->control_current.control_width < x_offset[1]){
       width = note_edit->control_current.control_width;
     }else{
-      width = x_offset[1] - (selected_x + note_edit->control_current.control_width);
+      width = note_edit->control_current.control_width - (x_offset[1] - (selected_x + note_edit->control_current.control_width));
     }
   }
 
@@ -641,16 +714,32 @@ ags_note_edit_draw_notation(AgsNoteEdit *note_edit, cairo_t *cr)
   AgsMachine *machine;
   AgsEditor *editor;
   GtkWidget *widget;
+
   AgsNote *note;
+
+  AgsMutexManager *mutex_manager;
+
   GList *list_notation, *list_note;
+
   guint x_offset;
   guint control_height;
   guint x, y, width, height;
   gint selected_channel;
   gint i;
 
+  pthread_mutex_t *audio_mutex;
+
   editor = (AgsEditor *) gtk_widget_get_ancestor(GTK_WIDGET(note_edit),
 						 AGS_TYPE_EDITOR);
+
+  pthread_mutex_lock(&(ags_application_mutex));
+  
+  mutex_manager = ags_mutex_manager_get_instance();
+
+  audio_mutex = ags_mutex_manager_lookup(mutex_manager,
+					 (GObject *) editor->selected_machine->audio);
+  
+  pthread_mutex_unlock(&(ags_application_mutex));
 
   if(editor->selected_machine == NULL ||
      (machine = editor->selected_machine) == NULL ||
@@ -663,10 +752,16 @@ ags_note_edit_draw_notation(AgsNoteEdit *note_edit, cairo_t *cr)
 
   i = 0;
 
-  while((selected_channel = ags_notebook_next_active_tab(editor->notebook,
+  while((selected_channel = ags_notebook_next_active_tab(editor->current_notebook,
 							 i)) != -1){
     list_notation = g_list_nth(machine->audio->notation,
 			       selected_channel);
+
+    if(list_notation == NULL){
+      i++;
+      continue;
+    }
+
     list_note = AGS_NOTATION(list_notation->data)->notes;
 
     control_height = note_edit->control_height - 2 * note_edit->control_margin_y;
@@ -882,7 +977,7 @@ ags_note_edit_draw_scroll(AgsNoteEdit *note_edit, cairo_t *cr,
   double width, height;
 
   y = 0.0;
-  x = (position) - (GTK_RANGE(note_edit->hscrollbar)->adjustment->value * note_edit->control_current.control_width);
+  x = (position) - (GTK_RANGE(note_edit->hscrollbar)->adjustment->value);
 
   height = (double) GTK_WIDGET(note_edit->drawing_area)->allocation.height;
   width = 3.0;
@@ -905,7 +1000,8 @@ ags_note_edit_new()
 {
   AgsNoteEdit *note_edit;
 
-  note_edit = (AgsNoteEdit *) g_object_new(AGS_TYPE_NOTE_EDIT, NULL);
+  note_edit = (AgsNoteEdit *) g_object_new(AGS_TYPE_NOTE_EDIT,
+					   NULL);
 
   return(note_edit);
 }

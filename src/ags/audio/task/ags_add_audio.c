@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/audio/task/ags_add_audio.h>
@@ -31,12 +32,12 @@ void ags_add_audio_launch(AgsTask *task);
 
 /**
  * SECTION:ags_add_audio
- * @short_description: add audio object to soundcard
+ * @short_description: add audio object to devout
  * @title: AgsAddAudio
  * @section_id:
  * @include: ags/audio/task/ags_add_audio.h
  *
- * The #AgsAddAudio task adds #AgsAudio to #AgsSoundcard.
+ * The #AgsAddAudio task adds #AgsAudio to #AgsDevout.
  */
 
 static gpointer ags_add_audio_parent_class = NULL;
@@ -110,7 +111,7 @@ ags_add_audio_connectable_interface_init(AgsConnectableInterface *connectable)
 void
 ags_add_audio_init(AgsAddAudio *add_audio)
 {
-  add_audio->soundcard = NULL;
+  add_audio->devout = NULL;
   add_audio->audio = NULL;
 }
 
@@ -146,24 +147,17 @@ ags_add_audio_launch(AgsTask *task)
   
   add_audio = AGS_ADD_AUDIO(task);
 
-  //TODO:JK: use AgsSoundcard
-  
   /* add audio */
-  g_object_ref(G_OBJECT(add_audio->audio));
-  
-  list = ags_soundcard_get_audio(add_audio->soundcard);
-  list = g_list_prepend(list,
-			add_audio->audio);
-  ags_soundcard_set_audio(add_audio->soundcard,
-			  list);
-  
+  ags_devout_add_audio(add_audio->devout,
+		       G_OBJECT(add_audio->audio));
+
   /* AgsAudio */
   ags_connectable_connect(AGS_CONNECTABLE(add_audio->audio));
 }
 
 /**
  * ags_add_audio_new:
- * @soundcard: the #AgsSoundcard
+ * @devout: the #AgsDevout
  * @audio: the #AgsAudio to add
  *
  * Creates an #AgsAddAudio.
@@ -173,7 +167,7 @@ ags_add_audio_launch(AgsTask *task)
  * Since: 0.4
  */
 AgsAddAudio*
-ags_add_audio_new(GObject *soundcard,
+ags_add_audio_new(AgsDevout *devout,
 		  AgsAudio *audio)
 {
   AgsAddAudio *add_audio;
@@ -181,7 +175,7 @@ ags_add_audio_new(GObject *soundcard,
   add_audio = (AgsAddAudio *) g_object_new(AGS_TYPE_ADD_AUDIO,
 					   NULL);
 
-  add_audio->soundcard = soundcard;
+  add_audio->devout = devout;
   add_audio->audio = audio;
 
   return(add_audio);

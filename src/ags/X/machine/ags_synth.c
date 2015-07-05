@@ -1,28 +1,31 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/X/machine/ags_synth.h>
 #include <ags/X/machine/ags_synth_callbacks.h>
 
+#include <ags/main.h>
+
+#include <ags-lib/object/ags_connectable.h>
+
 #include <ags/util/ags_id_generator.h>
 
-#include <ags/object/ags_application_context.h>
-#include <ags/object/ags_connectable.h>
 #include <ags/object/ags_plugin.h>
 
 #include <ags/file/ags_file.h>
@@ -62,9 +65,6 @@
 #include <ags/X/ags_pad.h>
 #include <ags/X/ags_line.h>
 
-#include <ags/X/file/ags_gsequencer_file_xml.h>
-
-#include <ags/X/machine/ags_synth_bridge.h>
 #include <ags/X/machine/ags_synth_input_pad.h>
 #include <ags/X/machine/ags_synth_input_line.h>
 #include <ags/X/machine/ags_oscillator.h>
@@ -87,9 +87,9 @@ void ags_synth_set_name(AgsPlugin *plugin, gchar *name);
 gchar* ags_synth_get_xml_type(AgsPlugin *plugin);
 void ags_synth_set_xml_type(AgsPlugin *plugin, gchar *xml_type);
 void ags_synth_read(AgsFile *file, xmlNode *node, AgsPlugin *plugin);
-xmlNode* ags_synth_write(AgsFile *file, xmlNode *parent, AgsPlugin *plugin);
 void ags_synth_read_resolve_audio(AgsFileLookup *file_lookup,
 				  AgsMachine *machine);
+xmlNode* ags_synth_write(AgsFile *file, xmlNode *parent, AgsPlugin *plugin);
 
 void ags_synth_set_audio_channels(AgsAudio *audio,
 				  guint audio_channels, guint audio_channels_old,
@@ -230,8 +230,7 @@ ags_synth_init(AgsSynth *synth)
   audio = AGS_MACHINE(synth)->audio;
   audio->flags |= (AGS_AUDIO_ASYNC |
 		   AGS_AUDIO_OUTPUT_HAS_RECYCLING |
-		   AGS_AUDIO_INPUT_HAS_RECYCLING |
-		   AGS_AUDIO_HAS_NOTATION);
+		   AGS_AUDIO_INPUT_HAS_RECYCLING);
 
   AGS_MACHINE(synth)->input_pad_type = AGS_TYPE_SYNTH_INPUT_PAD;
   AGS_MACHINE(synth)->input_line_type = AGS_TYPE_SYNTH_INPUT_LINE;
@@ -244,9 +243,9 @@ ags_synth_init(AgsSynth *synth)
   g_signal_connect_after(G_OBJECT(AGS_MACHINE(synth)->audio), "set_pads\0",
 			 G_CALLBACK(ags_synth_set_pads), synth);
 
-  //TODO:JK: uncomment me
   //  AGS_MACHINE(synth)->flags |= AGS_MACHINE_IS_SYNTHESIZER;
-
+  AGS_MACHINE(synth)->mapping_flags |= AGS_MACHINE_MONO;
+  
   /* create widgets */
   synth->flags = 0;
  
@@ -265,8 +264,8 @@ ags_synth_init(AgsSynth *synth)
 		     FALSE, FALSE,
 		     0);
 
-  synth->input_pad = (GtkHBox *) gtk_vbox_new(FALSE, 0);
-  AGS_MACHINE(synth)->input = synth->input_pad;
+  synth->input_pad = (GtkVBox *) gtk_vbox_new(FALSE, 0);
+  AGS_MACHINE(synth)->input = (GtkContainer *) synth->input_pad;
   gtk_box_pack_start((GtkBox *) hbox,
 		     (GtkWidget *) AGS_MACHINE(synth)->input,
 		     FALSE, FALSE,
@@ -289,12 +288,8 @@ ags_synth_init(AgsSynth *synth)
   gtk_box_pack_start((GtkBox *) control_vbox, (GtkWidget *) synth->update, FALSE, FALSE, 0);
 
 
-  /* base frequency and loop control */
-  table = (GtkTable *) gtk_table_new(4, 2, FALSE);
-  gtk_box_pack_start((GtkBox *) control_vbox,
-		     (GtkWidget *) table,
-		     FALSE, FALSE,
-		     0);
+  table = (GtkTable *) gtk_table_new(3, 2, FALSE);
+  gtk_box_pack_start((GtkBox *) vbox, (GtkWidget *) table, FALSE, FALSE, 0);
 
   
   label = (GtkLabel *) g_object_new(GTK_TYPE_LABEL,
@@ -355,13 +350,6 @@ ags_synth_init(AgsSynth *synth)
 		   2, 3,
 		   GTK_FILL, GTK_FILL,
 		   0, 0);
-
-  /* effect bridge */
-  AGS_MACHINE(synth)->bridge = ags_synth_bridge_new(audio);
-  gtk_box_pack_start((GtkBox *) vbox,
-		     (GtkWidget *) AGS_MACHINE(synth)->bridge,
-		     FALSE, FALSE,
-		     0);
 }
 
 void
@@ -420,7 +408,7 @@ ags_synth_map_recall(AgsMachine *machine)
   audio = machine->audio;
   synth = AGS_SYNTH(machine);
 
-  /* ags-delay */
+  /* ags-delay * /
   ags_recall_factory_create(audio,
 			    NULL, NULL,
 			    "ags-stream\0",
@@ -428,10 +416,10 @@ ags_synth_map_recall(AgsMachine *machine)
 			    0, audio->output_pads,
 			    (AGS_RECALL_FACTORY_OUTPUT |
 			     AGS_RECALL_FACTORY_ADD |
-			     AGS_RECALL_FACTORY_PLAY |
-			     AGS_RECALL_FACTORY_RECALL),
+			     AGS_RECALL_FACTORY_PLAY),
 			    0);
-
+  */
+  
   AGS_MACHINE_CLASS(ags_synth_parent_class)->map_recall(machine);
 }
 
@@ -470,17 +458,22 @@ ags_synth_read(AgsFile *file, xmlNode *node, AgsPlugin *plugin)
 
   ags_file_add_id_ref(file,
 		      g_object_new(AGS_TYPE_FILE_ID_REF,
-				   "application-context\0", file->application_context,
+				   "main\0", file->ags_main,
 				   "file\0", file,
 				   "node\0", node,
 				   "xpath\0", g_strdup_printf("xpath=//*[@id='%s']\0", xmlGetProp(node, AGS_FILE_ID_PROP)),
 				   "reference\0", gobject,
 				   NULL));
 
+  /* fix wrong flag */
+  AGS_MACHINE(gobject)->flags &= (~AGS_MACHINE_IS_SYNTHESIZER);
+  
   list = file->lookup;
 
-  while((file_lookup = ags_file_lookup_find_by_node(list,
-						    node->parent)) != NULL){
+  while((list = ags_file_lookup_find_by_node(list,
+					     node->parent)) != NULL){
+    file_lookup = AGS_FILE_LOOKUP(list->data);
+    
     if(g_signal_handler_find(list->data,
 			     G_SIGNAL_MATCH_FUNC,
 			     0,
@@ -527,6 +520,14 @@ ags_synth_read_resolve_audio(AgsFileLookup *file_lookup,
 
   g_signal_connect_after(G_OBJECT(machine->audio), "set_pads\0",
 			 G_CALLBACK(ags_synth_set_pads), synth);
+
+  if((AGS_MACHINE_PREMAPPED_RECALL & (machine->flags)) == 0){
+    synth->mapped_output_pad = machine->audio->output_pads;
+    synth->mapped_input_pad = machine->audio->input_pads;
+  }else{
+    synth->mapped_output_pad = machine->audio->output_pads;
+    synth->mapped_input_pad = machine->audio->input_pads;
+  }
 }
 
 xmlNode*
@@ -548,7 +549,7 @@ ags_synth_write(AgsFile *file, xmlNode *parent, AgsPlugin *plugin)
 
   ags_file_add_id_ref(file,
 		      g_object_new(AGS_TYPE_FILE_ID_REF,
-				   "application-context\0", file->application_context,
+				   "main\0", file->ags_main,
 				   "file\0", file,
 				   "node\0", node,
 				   "xpath\0", g_strdup_printf("xpath=//*[@id='%s']\0", id),
@@ -592,19 +593,10 @@ ags_synth_set_pads(AgsAudio *audio, GType type,
 void
 ags_synth_update(AgsSynth *synth)
 {
-  AgsWindow *window;
   AgsOscillator *oscillator;
-
+  AgsDevout *devout;
   AgsChannel *channel;
   AgsApplySynth *apply_synth;
-
-  AgsThread *main_loop, *current;
-  AgsTaskThread *task_thread;
-
-  AgsApplicationContext *application_context;
-  
-  AgsSoundcard *soundcard;
-
   GList *input_pad, *input_pad_start;
   GList *input_line, *input_line_start;
   guint wave;
@@ -613,15 +605,7 @@ ags_synth_update(AgsSynth *synth)
   guint loop_start, loop_end;
   gdouble volume;
 
-  window = gtk_widget_get_toplevel(synth);
-  
-  application_context = window->application_context;
-  
-  main_loop = application_context->main_loop;
-  task_thread = ags_thread_find_type(main_loop,
-				     AGS_TYPE_TASK_THREAD);
-
-  soundcard = AGS_SOUNDCARD(AGS_MACHINE(synth)->audio->soundcard);
+  devout = AGS_DEVOUT(AGS_MACHINE(synth)->audio->devout);
 
   start = (guint) gtk_spin_button_get_value_as_int(synth->lower);
 
@@ -631,12 +615,11 @@ ags_synth_update(AgsSynth *synth)
   /* write input */
   channel = AGS_MACHINE(synth)->audio->input;
   input_pad_start = 
-    input_pad = gtk_container_get_children(synth->input_pad);
+    input_pad = gtk_container_get_children((GtkContainer *)synth->input_pad);
 
   while(input_pad != NULL){
-    input_line = gtk_container_get_children(AGS_PAD(input_pad->data)->expander_set);
-    oscillator = AGS_OSCILLATOR(gtk_container_get_children(AGS_LINE(input_line->data)->expander->table)->data);
-
+    input_line = gtk_container_get_children((GtkContainer *) AGS_PAD(input_pad->data)->expander_set);
+    oscillator = AGS_OSCILLATOR(gtk_container_get_children((GtkContainer *) AGS_LINE(input_line->data)->expander->table)->data);
     wave = (guint) gtk_combo_box_get_active(oscillator->wave) + 1;
     attack = (guint) gtk_spin_button_get_value_as_int(oscillator->attack);
     frame_count = (guint) gtk_spin_button_get_value_as_int(oscillator->frame_count);
@@ -651,7 +634,7 @@ ags_synth_update(AgsSynth *synth)
 				      volume,
 				      loop_start, loop_end);
 
-    ags_task_thread_append_task(task_thread,
+    ags_task_thread_append_task(AGS_TASK_THREAD(AGS_AUDIO_LOOP(AGS_MAIN(devout->ags_main)->main_loop)->task_thread),
 				AGS_TASK(apply_synth));
 
     channel = channel->next;
@@ -663,11 +646,11 @@ ags_synth_update(AgsSynth *synth)
   /* write output */
   channel = AGS_MACHINE(synth)->audio->output;
   input_pad_start = 
-    input_pad = gtk_container_get_children(synth->input_pad);
+    input_pad = gtk_container_get_children((GtkContainer *) synth->input_pad);
 
   while(input_pad != NULL){
-    input_line = gtk_container_get_children(AGS_PAD(input_pad->data)->expander_set);
-    oscillator = AGS_OSCILLATOR(gtk_container_get_children(AGS_LINE(input_line->data)->expander->table)->data);
+    input_line = gtk_container_get_children((GtkContainer *) AGS_PAD(input_pad->data)->expander_set);
+    oscillator = AGS_OSCILLATOR(gtk_container_get_children((GtkContainer *) AGS_LINE(input_line->data)->expander->table)->data);
 
     wave = (guint) gtk_combo_box_get_active(oscillator->wave) + 1;
     attack = (guint) gtk_spin_button_get_value_as_int(oscillator->attack);
@@ -683,7 +666,7 @@ ags_synth_update(AgsSynth *synth)
 				      volume,
 				      loop_start, loop_end);
 
-    ags_task_thread_append_task(task_thread,
+    ags_task_thread_append_task(AGS_TASK_THREAD(AGS_AUDIO_LOOP(AGS_MAIN(devout->ags_main)->main_loop)->task_thread),
 				AGS_TASK(apply_synth));
 
     input_pad = input_pad->next;
@@ -694,7 +677,7 @@ ags_synth_update(AgsSynth *synth)
 
 /**
  * ags_synth_new:
- * @soundcard: the assigned soundcard.
+ * @devout: the assigned devout.
  *
  * Creates an #AgsSynth
  *
@@ -703,7 +686,7 @@ ags_synth_update(AgsSynth *synth)
  * Since: 0.3
  */
 AgsSynth*
-ags_synth_new(GObject *soundcard)
+ags_synth_new(GObject *devout)
 {
   AgsSynth *synth;
   GValue value = {0,};
@@ -711,13 +694,9 @@ ags_synth_new(GObject *soundcard)
   synth = (AgsSynth *) g_object_new(AGS_TYPE_SYNTH,
 				    NULL);
 
-  if(soundcard != NULL){
-    g_value_init(&value, G_TYPE_OBJECT);
-    g_value_set_object(&value, soundcard);
-    g_object_set_property(G_OBJECT(AGS_MACHINE(synth)->audio),
-			  "soundcard\0", &value);
-    g_value_unset(&value);
-  }
+  g_object_set(G_OBJECT(AGS_MACHINE(synth)->audio),
+	       "devout\0", devout,
+	       NULL);
 
   return(synth);
 }

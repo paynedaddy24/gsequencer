@@ -1,22 +1,24 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2014 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/audio/recall/ags_peak_channel_run.h>
+#include <ags/audio/recall/ags_peak_recycling.h>
 
 #include <ags/object/ags_connectable.h>
 
@@ -45,7 +47,6 @@ void ags_peak_channel_run_finalize(GObject *gobject);
 AgsRecall* ags_peak_channel_run_duplicate(AgsRecall *recall,
 					    AgsRecallID *recall_id,
 					    guint *n_params, GParameter *parameter);
-void ags_peak_channel_run_run_post(AgsRecall *recall);
 
 /**
  * SECTION:ags_peak_channel_run
@@ -125,7 +126,6 @@ ags_peak_channel_run_class_init(AgsPeakChannelRunClass *peak_channel_run)
   recall = (AgsRecallClass *) peak_channel_run;
 
   recall->duplicate = ags_peak_channel_run_duplicate;
-  recall->run_post = ags_peak_channel_run_run_post;
 }
 
 void
@@ -150,13 +150,13 @@ void
 ags_peak_channel_run_init(AgsPeakChannelRun *peak_channel_run)
 {
   AGS_RECALL(peak_channel_run)->name = "ags-peak\0";
-  AGS_RECALL(peak_channel_run)->version = AGS_RECALL_DEFAULT_VERSION;
-  AGS_RECALL(peak_channel_run)->build_id = AGS_RECALL_DEFAULT_BUILD_ID;
+  AGS_RECALL(peak_channel_run)->version = AGS_EFFECTS_DEFAULT_VERSION;
+  AGS_RECALL(peak_channel_run)->build_id = AGS_BUILD_ID;
   AGS_RECALL(peak_channel_run)->xml_type = "ags-peak-channel-run\0";
   AGS_RECALL(peak_channel_run)->port = NULL;
 
   AGS_RECALL(peak_channel_run)->flags |= AGS_RECALL_INPUT_ORIENTATED;
-  AGS_RECALL(peak_channel_run)->child_type = G_TYPE_NONE;
+  AGS_RECALL(peak_channel_run)->child_type = AGS_TYPE_PEAK_RECYCLING;
 }
 
 void
@@ -215,39 +215,6 @@ ags_peak_channel_run_duplicate(AgsRecall *recall,
 											      n_params, parameter);
   
   return((AgsRecall *) copy);
-}
-
-void
-ags_peak_channel_run_run_post(AgsRecall *recall)
-{
-  AgsChannel *source;
-  AgsRecallChannel *recall_channel;
-  GList *list;
-
-  /* call parent */
-  AGS_RECALL_CLASS(ags_peak_channel_run_parent_class)->run_post(recall);
-
-  /*  */
-  source = AGS_RECALL_CHANNEL_RUN(recall)->source;
-  recall_channel = AGS_RECALL_CHANNEL_RUN(recall)->recall_channel;
-
-  if(AGS_RECYCLING_CONTEXT(AGS_RECALL_ID(recall->recall_id)->recycling_context)->parent == NULL){
-    list = ags_recall_find_type(source->play,
-				AGS_TYPE_PEAK_CHANNEL_RUN);
-
-    //    if(g_list_last(list) == recall){
-      ags_peak_channel_retrieve_peak(recall_channel,
-				     TRUE);
-      //    }
-  }else{
-    list = ags_recall_find_type(source->recall,
-				AGS_TYPE_PEAK_CHANNEL_RUN);
-
-    //    if(g_list_last(list) == recall){
-      ags_peak_channel_retrieve_peak(recall_channel,
-				     FALSE);
-      //    }
-  }
 }
 
 /**

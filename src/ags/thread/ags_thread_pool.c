@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2013 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/thread/ags_thread_pool.h>
@@ -54,7 +55,7 @@ void ags_thread_pool_real_start(AgsThreadPool *thread_pool);
  * This can achieve enormeous performance.
  */
 
-#define AGS_THREAD_POOL_DEFAULT_MAX_UNUSED_THREADS 16
+#define AGS_THREAD_POOL_DEFAULT_MAX_UNUSED_THREADS 4
 #define AGS_THREAD_POOL_DEFAULT_MAX_THREADS 1024
 
 enum{
@@ -182,7 +183,6 @@ ags_thread_pool_init(AgsThreadPool *thread_pool)
 		   AGS_THREAD_POOL_DEFAULT_MAX_THREADS);
 
   thread_pool->thread = (pthread_t *) malloc(sizeof(pthread_t));
-  
   thread_pool->creation_mutex = (pthread_mutex_t *) malloc(sizeof(pthread_mutex_t));
   pthread_mutex_init(thread_pool->creation_mutex, NULL);
 
@@ -200,8 +200,8 @@ ags_thread_pool_init(AgsThreadPool *thread_pool)
   list = NULL;
 
   for(i = 0; i < g_atomic_int_get(&(thread_pool->max_unused_threads)); i++){
-    thread = (AgsThread *) ags_returnable_thread_new(thread_pool);
-  
+    thread = (AgsThread *) ags_returnable_thread_new((GObject *) thread_pool);
+
     list = g_list_prepend(list, thread);
   }
 
@@ -215,7 +215,6 @@ ags_thread_pool_init(AgsThreadPool *thread_pool)
 
   thread_pool->return_mutex = (pthread_mutex_t *) malloc(sizeof(pthread_mutex_t));
   pthread_mutex_init(thread_pool->return_mutex, NULL);
-
   
   thread_pool->return_cond = (pthread_cond_t *) malloc(sizeof(pthread_cond_t));
   pthread_cond_init(thread_pool->return_cond, NULL);
@@ -356,7 +355,7 @@ ags_thread_pool_creation_thread(void *ptr)
     
     if(n_threads < max_threads){
       for(i = 0; i < i_stop && n_threads < max_threads; i++){
-	thread = (AgsThread *) ags_returnable_thread_new(thread_pool);
+	thread = (AgsThread *) ags_returnable_thread_new((GObject *) thread_pool);
 	tmplist = g_atomic_pointer_get(&(thread_pool->returnable_thread));
 	g_atomic_pointer_set(&(thread_pool->returnable_thread),
 			     g_list_prepend(tmplist, thread));      
@@ -468,6 +467,8 @@ ags_thread_pool_pull(AgsThreadPool *thread_pool)
   }
 
   pthread_mutex_unlock(thread_pool->return_mutex);
+
+  //  pthread_detach(*(AGS_THREAD(returnable_thread)->thread));
 
   return(AGS_THREAD(returnable_thread));
 }

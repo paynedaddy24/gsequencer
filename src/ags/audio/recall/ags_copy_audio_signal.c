@@ -1,27 +1,31 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/audio/recall/ags_copy_audio_signal.h>
 
-#include <ags/object/ags_connectable.h>
-#include <ags/object/ags_dynamic_connectable.h>
-#include <ags/object/ags_soundcard.h>
+#include <ags-lib/object/ags_connectable.h>
 
+#include <ags/main.h>
+
+#include <ags/object/ags_dynamic_connectable.h>
+
+#include <ags/audio/ags_devout.h>
 #include <ags/audio/ags_audio_signal.h>
 #include <ags/audio/ags_recycling.h>
 #include <ags/audio/ags_channel.h>
@@ -62,10 +66,10 @@ static gpointer ags_copy_audio_signal_parent_class = NULL;
 static AgsConnectableInterface *ags_copy_audio_signal_parent_connectable_interface;
 static AgsDynamicConnectableInterface *ags_copy_audio_signal_parent_dynamic_connectable_interface;
 
-extern void ags_audio_signal_copy_buffer_to_buffer(signed short *destination, guint dchannels,
-						   signed short *source, guint schannels, guint size)
-  __attribute__ ((hot))
-  __attribute__ ((fastcall));
+//extern void ags_audio_signal_copy_buffer_to_buffer(signed short *destination, guint dchannels,
+//						   signed short *source, guint schannels, guint size)
+//  __attribute__ ((hot))
+//  __attribute__ ((fastcall));
 
 GType
 ags_copy_audio_signal_get_type()
@@ -156,8 +160,8 @@ void
 ags_copy_audio_signal_init(AgsCopyAudioSignal *copy_audio_signal)
 {
   AGS_RECALL(copy_audio_signal)->name = "ags-copy\0";
-  AGS_RECALL(copy_audio_signal)->version = AGS_RECALL_DEFAULT_VERSION;
-  AGS_RECALL(copy_audio_signal)->build_id = AGS_RECALL_DEFAULT_BUILD_ID;
+  AGS_RECALL(copy_audio_signal)->version = AGS_EFFECTS_DEFAULT_VERSION;
+  AGS_RECALL(copy_audio_signal)->build_id = AGS_BUILD_ID;
   AGS_RECALL(copy_audio_signal)->xml_type = "ags-copy-audio-signal\0";
   AGS_RECALL(copy_audio_signal)->port = NULL;
 
@@ -212,6 +216,7 @@ ags_copy_audio_signal_finalize(GObject *gobject)
 void
 ags_copy_audio_signal_run_inter(AgsRecall *recall)
 {
+  AgsDevout *devout;
   AgsCopyChannel *copy_channel;
   AgsCopyAudioSignal *copy_audio_signal;
   AgsAudioSignal *source, *destination;
@@ -223,6 +228,7 @@ ags_copy_audio_signal_run_inter(AgsRecall *recall)
 
   copy_audio_signal = AGS_COPY_AUDIO_SIGNAL(recall);
 
+  devout = AGS_DEVOUT(AGS_RECALL(copy_audio_signal)->devout);
   source = AGS_RECALL_AUDIO_SIGNAL(copy_audio_signal)->source;
   stream_source = source->stream_current;
 
@@ -291,7 +297,7 @@ ags_copy_audio_signal_duplicate(AgsRecall *recall,
  * ags_copy_audio_signal_new:
  * @destination: the destination #AgsAudioSignal
  * @source: the source #AgsAudioSignal
- * @soundcard: the #AgsSoundcard defaulting to
+ * @devout: the #AgsDevout defaulting to
  * @attack: the attack
  *
  * Creates an #AgsCopyAudioSignal
@@ -303,15 +309,15 @@ ags_copy_audio_signal_duplicate(AgsRecall *recall,
 AgsCopyAudioSignal*
 ags_copy_audio_signal_new(AgsAudioSignal *destination,
 			  AgsAudioSignal *source,
-			  GObject *soundcard,
-			  guint attack)
+			  AgsDevout *devout,
+			  AgsAttack *attack)
 {
   AgsCopyAudioSignal *copy_audio_signal;
 
   copy_audio_signal = (AgsCopyAudioSignal *) g_object_new(AGS_TYPE_COPY_AUDIO_SIGNAL,
 							  "destination\0", destination,
 							  "source\0", source,
-							  "soundcard\0", soundcard,
+							  "devout\0", devout,
 							  "attack\0", attack,
 							  NULL);
 

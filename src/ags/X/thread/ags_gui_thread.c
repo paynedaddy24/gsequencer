@@ -1,24 +1,31 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/X/thread/ags_gui_thread.h>
 
-#include <ags/object/ags_connectable.h>
+#include <ags-lib/object/ags_connectable.h>
+
+#include <ags/main.h>
+
+#include <ags/audio/ags_devout.h>
+
+#include <ags/thread/ags_task_completion.h>
 
 #include <math.h>
 
@@ -133,6 +140,8 @@ ags_gui_thread_init(AgsGuiThread *gui_thread)
 
   g_cond_init(&(gui_thread->cond));
   g_mutex_init(&(gui_thread->mutex));
+
+  gui_thread->task_completion = NULL;
 }
 
 void
@@ -184,7 +193,8 @@ ags_gui_thread_run(AgsThread *thread)
   int success;
 
   auto void ags_gui_thread_do_gtk_iteration();
-
+  auto void ags_gui_thread_complete_task();
+  
   void ags_gui_thread_do_gtk_iteration(){
 
     if(!g_main_context_acquire(main_context)){
@@ -198,7 +208,7 @@ ags_gui_thread_run(AgsThread *thread)
     }
 
     /*  */
-    //    success = pthread_mutex_trylock(&(thread->suspend_mutex));
+    //    success = pthread_mutex_trylock(thread->suspend_mutex);
     success = FALSE;
     
     if(success){
@@ -206,10 +216,12 @@ ags_gui_thread_run(AgsThread *thread)
 		       TRUE);
     }
 
-    
+    /*  */
+    pthread_mutex_lock(audio_loop->recall_mutex);
+
     if(success){
       /*  */
-      pthread_mutex_unlock(&(thread->suspend_mutex));
+      pthread_mutex_unlock(thread->suspend_mutex);
     }else{
       //      g_atomic_int_set(&(thread->critical_region),
       //	       TRUE);
@@ -222,19 +234,42 @@ ags_gui_thread_run(AgsThread *thread)
     g_main_context_iteration(main_context, FALSE);
 
     /*  */
-    //    success = pthread_mutex_trylock(&(thread->suspend_mutex));
-    
+    //    success = pthread_mutex_trylock(thread->suspend_mutex);
+      
+    /*  */
+    pthread_mutex_unlock(audio_loop->recall_mutex);
+
     /*  */
     //    g_atomic_int_set(&(thread->critical_region),
     //		     FALSE);
 
     if(success){
-      pthread_mutex_unlock(&(thread->suspend_mutex));
+      pthread_mutex_unlock(thread->suspend_mutex);
     }
 
     g_main_context_release(main_context);
   }
 
+  void ags_gui_thread_complete_task()
+  {
+    GList *list, *list_next;
+
+    list = gui_thread->task_completion;
+
+    while(list != NULL){
+      list_next = list->next;
+      
+      if((AGS_TASK_COMPLETION_READY & (g_atomic_int_get(&(AGS_TASK_COMPLETION(list->data)->flags)))) != 0){
+	ags_task_completion_complete(AGS_TASK_COMPLETION(list->data));
+
+	gui_thread->task_completion = g_list_remove(gui_thread->task_completion,
+						    list->data);
+      }
+
+      list = list_next;
+    }
+  }
+  
   gui_thread = AGS_GUI_THREAD(thread);
   main_loop = ags_thread_get_toplevel(thread);
   
@@ -242,6 +277,8 @@ ags_gui_thread_run(AgsThread *thread)
   main_context = g_main_context_default();
 
   ags_gui_thread_do_gtk_iteration();
+
+  ags_gui_thread_complete_task();  
 }
 
 void
@@ -250,7 +287,7 @@ ags_gui_thread_suspend(AgsThread *thread)
   gboolean success;
   gboolean critical_region;
 
-  success = pthread_mutex_trylock(&(thread->suspend_mutex));
+  success = pthread_mutex_trylock(thread->suspend_mutex);
   critical_region = g_atomic_int_get(&(thread->critical_region));
 
   if(success || critical_region){
@@ -258,13 +295,13 @@ ags_gui_thread_suspend(AgsThread *thread)
     AgsGuiThread *gui_thread;
     
     if(success){
-      pthread_mutex_unlock(&(thread->suspend_mutex));
+      pthread_mutex_unlock(thread->suspend_mutex);
     }
 
     gui_thread = AGS_GUI_THREAD(thread);
     main_loop = ags_thread_get_toplevel(thread);
 
-    ags_thread_unlock(main_loop);
+    pthread_mutex_unlock(task_thread->launch_mutex);
   }
 }
 
@@ -274,7 +311,7 @@ ags_gui_thread_resume(AgsThread *thread)
   gboolean success;
   gboolean critical_region;
 
-  success = pthread_mutex_trylock(&(thread->suspend_mutex));
+  success = pthread_mutex_trylock(thread->suspend_mutex);
   critical_region = g_atomic_int_get(&(thread->critical_region));
 
   if(success || critical_region){
@@ -282,13 +319,13 @@ ags_gui_thread_resume(AgsThread *thread)
     AgsGuiThread *gui_thread;
 
     if(success){
-      pthread_mutex_unlock(&(thread->suspend_mutex));
+      pthread_mutex_unlock(thread->suspend_mutex);
     }
 
     gui_thread = AGS_GUI_THREAD(thread);
     main_loop = ags_thread_get_toplevel(thread);
 
-    ags_thread_unlock(main_loop);
+    pthread_mutex_lock(task_thread->launch_mutex);
   }
 }
 

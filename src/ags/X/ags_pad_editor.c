@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/X/ags_pad_editor.h>
@@ -221,6 +222,12 @@ ags_pad_editor_connect(AgsConnectable *connectable)
   g_signal_connect((GObject *) pad_editor, "show\0",
 		   G_CALLBACK(ags_pad_editor_show_callback), (gpointer) pad_editor);
 
+  /* AgsAudio */
+  audio = AGS_AUDIO(pad_editor->pad->audio);
+
+  pad_editor->set_audio_channels_handler = g_signal_connect_after(G_OBJECT(audio), "set_audio_channels\0",
+								  G_CALLBACK(ags_pad_editor_set_audio_channels_callback), pad_editor);
+
   /* AgsLineEditor */
   line_editor_start = 
     line_editor = gtk_container_get_children(GTK_CONTAINER(pad_editor->line_editor));
@@ -237,7 +244,16 @@ ags_pad_editor_connect(AgsConnectable *connectable)
 void
 ags_pad_editor_disconnect(AgsConnectable *connectable)
 {
-  /* empty */
+  AgsPadEditor *pad_editor;
+  AgsAudio *audio;
+
+  pad_editor = AGS_PAD_EDITOR(connectable);
+
+  /* AgsAudio */
+  audio = AGS_AUDIO(pad_editor->pad->audio);
+  
+  g_signal_handler_disconnect(audio,
+			      pad_editor->set_audio_channels_handler);
 }
 
 void

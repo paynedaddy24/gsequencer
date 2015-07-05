@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/audio/ags_recall_audio_signal.h>
@@ -24,8 +25,8 @@
 
 #include <ags/object/ags_connectable.h>
 #include <ags/object/ags_dynamic_connectable.h>
-#include <ags/object/ags_soundcard.h>
 
+#include <ags/audio/ags_devout.h>
 #include <ags/audio/ags_audio_signal.h>
 #include <ags/audio/ags_recycling.h>
 #include <ags/audio/ags_channel.h>
@@ -64,9 +65,9 @@ AgsRecall* ags_recall_audio_signal_duplicate(AgsRecall *recall,
 					     AgsRecallID *recall_id,
 					     guint *n_params, GParameter *parameter);
 
-void ags_recall_audio_signal_notify_soundcard(AgsRecallAudioSignal *recall_audio_signal, GParamSpec *param,
+void ags_recall_audio_signal_notify_devout(AgsRecallAudioSignal *recall_audio_signal, GParamSpec *param,
 					   gpointer data);
-void ags_recall_audio_signal_notify_soundcard_after(AgsRecallAudioSignal *recall_audio_signal, GParamSpec *param,
+void ags_recall_audio_signal_notify_devout_after(AgsRecallAudioSignal *recall_audio_signal, GParamSpec *param,
 						 gpointer data);
 
 /**
@@ -244,10 +245,10 @@ ags_recall_audio_signal_dynamic_connectable_interface_init(AgsDynamicConnectable
 void
 ags_recall_audio_signal_init(AgsRecallAudioSignal *recall_audio_signal)
 {
-  //  g_signal_connect(G_OBJECT(recall_audio_signal), "notify::soundcard\0",
-  //		   G_CALLBACK(ags_recall_audio_signal_notify_soundcard), NULL);
-  //  g_signal_connect_after(G_OBJECT(recall_audio_signal), "notify::soundcard\0",
-  //			 G_CALLBACK(ags_recall_audio_signal_notify_soundcard_after), NULL);
+  //  g_signal_connect(G_OBJECT(recall_audio_signal), "notify::devout\0",
+  //		   G_CALLBACK(ags_recall_audio_signal_notify_devout), NULL);
+  //  g_signal_connect_after(G_OBJECT(recall_audio_signal), "notify::devout\0",
+  //			 G_CALLBACK(ags_recall_audio_signal_notify_devout_after), NULL);
 
   recall_audio_signal->flags = AGS_RECALL_INITIAL_RUN;
   recall_audio_signal->audio_channel = 0;
@@ -409,7 +410,7 @@ ags_recall_audio_signal_duplicate(AgsRecall *recall,
   recall_audio_signal = AGS_RECALL_AUDIO_SIGNAL(recall);
   parameter = ags_parameter_grow(G_OBJECT_TYPE(recall),
 				 parameter, n_params,
-				 "soundcard\0", AGS_RECALL(recall_audio_signal)->soundcard,
+				 "devout\0", AGS_RECALL(recall_audio_signal)->devout,
 				 "audio_channel\0", recall_audio_signal->audio_channel,
 				 "destination\0", recall_audio_signal->destination,
 				 "source\0", recall_audio_signal->source,
@@ -529,14 +530,14 @@ ags_recall_audio_signal_done(AgsRecall *recall)
 }
 
 void
-ags_recall_audio_signal_notify_soundcard(AgsRecallAudioSignal *recall_audio_signal, GParamSpec *param,
+ags_recall_audio_signal_notify_devout(AgsRecallAudioSignal *recall_audio_signal, GParamSpec *param,
 				      gpointer data)
 {
   //TODO:JK: implement me
 }
 
 void
-ags_recall_audio_signal_notify_soundcard_after(AgsRecallAudioSignal *recall_audio_signal, GParamSpec *param,
+ags_recall_audio_signal_notify_devout_after(AgsRecallAudioSignal *recall_audio_signal, GParamSpec *param,
 					    gpointer data)
 {
   //TODO:JK: implement me
@@ -546,7 +547,7 @@ ags_recall_audio_signal_notify_soundcard_after(AgsRecallAudioSignal *recall_audi
  * ags_recall_audio_signal_new:
  * @destination: destination #AgsAudioSignal
  * @source: source #AgsAudioSignal
- * @soundcard: default sink #AgsSoundcard
+ * @devout: default sink #AgsDevout
  *
  * Creates an #AgsRecallAudioSignal.
  *
@@ -557,12 +558,12 @@ ags_recall_audio_signal_notify_soundcard_after(AgsRecallAudioSignal *recall_audi
 AgsRecallAudioSignal*
 ags_recall_audio_signal_new(AgsAudioSignal *destination,
 			    AgsAudioSignal *source,
-			    GObject *soundcard)
+			    AgsDevout *devout)
 {
   AgsRecallAudioSignal *recall_audio_signal;
 
   recall_audio_signal = (AgsRecallAudioSignal *) g_object_new(AGS_TYPE_RECALL_AUDIO_SIGNAL,
-							      "soundcard\0", soundcard,
+							      "devout\0", devout,
 							      "destination\0", destination,
 							      "source\0", source, 
 							      NULL);

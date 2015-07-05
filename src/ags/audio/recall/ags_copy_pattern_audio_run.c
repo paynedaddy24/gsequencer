@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/audio/recall/ags_copy_pattern_audio_run.h>
@@ -219,8 +220,8 @@ void
 ags_copy_pattern_audio_run_init(AgsCopyPatternAudioRun *copy_pattern_audio_run)
 {
   AGS_RECALL(copy_pattern_audio_run)->name = "ags-copy-pattern\0";
-  AGS_RECALL(copy_pattern_audio_run)->version = AGS_RECALL_DEFAULT_VERSION;
-  AGS_RECALL(copy_pattern_audio_run)->build_id = AGS_RECALL_DEFAULT_BUILD_ID;
+  AGS_RECALL(copy_pattern_audio_run)->version = AGS_EFFECTS_DEFAULT_VERSION;
+  AGS_RECALL(copy_pattern_audio_run)->build_id = AGS_BUILD_ID;
   AGS_RECALL(copy_pattern_audio_run)->xml_type = "ags-copy-pattern-audio-run\0";
   AGS_RECALL(copy_pattern_audio_run)->port = NULL;
 
@@ -244,7 +245,7 @@ ags_copy_pattern_audio_run_set_property(GObject *gobject,
   switch(prop_id){
   case PROP_DELAY_AUDIO_RUN:
     {
-      AgsCountBeatsAudioRun *delay_audio_run;
+      AgsDelayAudioRun *delay_audio_run;
       gboolean is_template;
 
       delay_audio_run = (AgsCountBeatsAudioRun *) g_value_get_object(value);
@@ -571,12 +572,12 @@ ags_copy_pattern_audio_run_resolve_dependencies(AgsRecall *recall)
       
     if(AGS_IS_DELAY_AUDIO_RUN(recall_dependency->dependency)){
       delay_audio_run = (AgsDelayAudioRun *) ags_recall_dependency_resolve(recall_dependency,
-									   recall_id->recycling_context->parent->recall_id);
+									   (AgsRecallID *) recall_id->recycling_container->parent->recall_id);
 
       i++;
     }else if(AGS_IS_COUNT_BEATS_AUDIO_RUN(recall_dependency->dependency)){
       count_beats_audio_run = (AgsCountBeatsAudioRun *) ags_recall_dependency_resolve(recall_dependency,
-										      recall_id->recycling_context->parent->recall_id);
+										      (AgsRecallID *) recall_id->recycling_container->parent->recall_id);
 
       i++;
     }

@@ -1,3 +1,21 @@
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
+ *
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * GSequencer is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
+ */
 #ifndef __AGS_SERVER_H__
 #define __AGS_SERVER_H__
 
@@ -52,10 +70,9 @@ struct _AgsServer
   struct sockaddr_in address;
 
   void *server_info;
-
-  GObject *application_context;
-  pthread_mutex_t *application_mutex;
   
+  GObject *main;
+
   AgsRegistry *registry;
   AgsRemoteTask *remote_task;
 };
@@ -83,6 +100,6 @@ xmlrpc_value* ags_server_object_set_property(xmlrpc_env *env,
 					     void *server_info);
 #endif
 
-AgsServer* ags_server_new(GObject *application_context);
+AgsServer* ags_server_new(GObject *main);
 
 #endif /*__AGS_SERVER_H__*/

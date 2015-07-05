@@ -1,28 +1,29 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/X/machine/ags_drum_output_line.h>
 #include <ags/X/machine/ags_drum_output_line_callbacks.h>
 
+#include <ags-lib/object/ags_connectable.h>
+
 #include <ags/util/ags_id_generator.h>
 
-#include <ags/object/ags_application_context.h>
-#include <ags/object/ags_connectable.h>
 #include <ags/object/ags_plugin.h>
 
 #include <ags/file/ags_file.h>
@@ -229,17 +230,17 @@ ags_drum_output_line_set_channel(AgsLine *line, AgsChannel *channel)
   drum_output_line = AGS_DRUM_OUTPUT_LINE(line);
 
   if(channel != NULL){
-    AgsSoundcard *soundcard;
+    AgsDevout *devout;
     AgsAudioSignal *audio_signal;
     gdouble delay;
     guint stop;
 
     if(channel->audio != NULL &&
-       AGS_AUDIO(channel->audio)->soundcard != NULL){
-      soundcard = AGS_SOUNDCARD(AGS_AUDIO(channel->audio)->soundcard);
+       AGS_AUDIO(channel->audio)->devout != NULL){
+      devout = AGS_DEVOUT(AGS_AUDIO(channel->audio)->devout);
 
-      audio_signal = ags_audio_signal_new(soundcard,
-					  channel->first_recycling,
+      audio_signal = ags_audio_signal_new((GObject *) devout,
+					  (GObject *) channel->first_recycling,
 					  NULL);
       audio_signal->flags |= AGS_AUDIO_SIGNAL_TEMPLATE;
       ags_recycling_add_audio_signal(channel->first_recycling,
@@ -254,7 +255,7 @@ ags_drum_output_line_map_recall(AgsLine *line,
 {
   AgsAudio *audio;
 
-  AgsChannel *output;
+  AgsChannel *output, *input;
   AgsDelayAudio *recall_delay_audio;
   AgsCountBeatsAudioRun *recall_count_beats_audio_run;
 
@@ -267,7 +268,25 @@ ags_drum_output_line_map_recall(AgsLine *line,
 
   output = line->channel;
   audio = AGS_AUDIO(output->audio);
+  
+  /* remap for input */
+  input = audio->input;
 
+  while(input != NULL){
+    /* ags-buffer */
+    ags_recall_factory_create(audio,
+			      NULL, NULL,
+			      "ags-buffer\0",
+			      0, audio->audio_channels, 
+			      input->pad, input->pad + 1,
+			      (AGS_RECALL_FACTORY_INPUT |
+			       AGS_RECALL_FACTORY_RECALL |
+			       AGS_RECALL_FACTORY_ADD),
+			      0);
+
+    input = input->next_pad;
+  }
+  
   /* get some recalls */
   list = ags_recall_find_type(audio->play, AGS_TYPE_DELAY_AUDIO);
 
@@ -310,7 +329,7 @@ ags_drum_output_line_read(AgsFile *file, xmlNode *node, AgsPlugin *plugin)
 
   ags_file_add_id_ref(file,
 		      g_object_new(AGS_TYPE_FILE_ID_REF,
-				   "application-context\0", file->application_context,
+				   "main\0", file->ags_main,
 				   "file\0", file,
 				   "node\0", node,
 				   "xpath\0", g_strdup_printf("xpath=//*[@id='%s']\0", xmlGetProp(node, AGS_FILE_ID_PROP)),
@@ -337,7 +356,7 @@ ags_drum_output_line_write(AgsFile *file, xmlNode *parent, AgsPlugin *plugin)
 
   ags_file_add_id_ref(file,
 		      g_object_new(AGS_TYPE_FILE_ID_REF,
-				   "application-context\0", file->application_context,
+				   "main\0", file->ags_main,
 				   "file\0", file,
 				   "node\0", node,
 				   "xpath\0", g_strdup_printf("xpath=//*[@id='%s']\0", id),

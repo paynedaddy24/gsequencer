@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/object/ags_main_loop.h>
@@ -30,7 +31,7 @@ void ags_main_loop_base_init(AgsMainLoopInterface *interface);
  * @include: ags/object/ags_main_loop.h
  *
  * The #AgsMainLoop interface gives you a unique access to toplevel
- * threads.
+ * threads and has to be implemented for it.
  */
 
 GType
@@ -59,26 +60,45 @@ ags_main_loop_base_init(AgsMainLoopInterface *interface)
   /* empty */
 }
 
+/**
+ * ags_main_loop_set_async_queue:
+ * @main_loop: the #AgsMainLoop
+ * @async_queue: the #AgsAsyncQueue
+ *
+ * Sets the asynchronous queue.
+ *
+ * Since: 0.4
+ */
 void
-ags_main_loop_set_application_context(AgsMainLoop *main_loop, AgsApplicationContext *application_context)
+ags_main_loop_set_async_queue(AgsMainLoop *main_loop, GObject *async_queue)
 {
   AgsMainLoopInterface *main_loop_interface;
 
   g_return_if_fail(AGS_IS_MAIN_LOOP(main_loop));
   main_loop_interface = AGS_MAIN_LOOP_GET_INTERFACE(main_loop);
-  g_return_if_fail(main_loop_interface->set_application_context);
-  main_loop_interface->set_application_context(main_loop, application_context);
+  g_return_if_fail(main_loop_interface->set_async_queue);
+  main_loop_interface->set_async_queue(main_loop, async_queue);
 }
 
-AgsApplicationContext*
-ags_main_loop_get_application_context(AgsMainLoop *main_loop)
+/**
+ * ags_main_loop_get_async_queue:
+ * @main_loop: the #AgsMainLoop
+ *
+ * Retrieve the #AgsAsyncQueue.
+ *
+ * Returns: the #AgsAsyncQueue
+ *
+ * Since: 0.4
+ */
+GObject*
+ags_main_loop_get_async_queue(AgsMainLoop *main_loop)
 {
   AgsMainLoopInterface *main_loop_interface;
 
   g_return_val_if_fail(AGS_IS_MAIN_LOOP(main_loop), NULL);
   main_loop_interface = AGS_MAIN_LOOP_GET_INTERFACE(main_loop);
-  g_return_val_if_fail(main_loop_interface->get_application_context, NULL);
-  main_loop_interface->get_application_context(main_loop);
+  g_return_val_if_fail(main_loop_interface->get_async_queue, NULL);
+  main_loop_interface->get_async_queue(main_loop);
 }
 
 /**
@@ -87,6 +107,8 @@ ags_main_loop_get_application_context(AgsMainLoop *main_loop)
  * @tic: tic
  *
  * Sets tic to @tic. 
+ *
+ * Since: 0.4
  */
 void
 ags_main_loop_set_tic(AgsMainLoop *main_loop, guint tic)
@@ -103,9 +125,11 @@ ags_main_loop_set_tic(AgsMainLoop *main_loop, guint tic)
  * ags_main_loop_get_tic:
  * @main_loop: the #AgsMainLoop
  *
- * Retrieve tic.
+ * Retrieve current tic of synchronization context.
  *
- * Returns: tic
+ * Returns: current tic
+ *
+ * Since: 0.4
  */
 guint
 ags_main_loop_get_tic(AgsMainLoop *main_loop)
@@ -124,6 +148,8 @@ ags_main_loop_get_tic(AgsMainLoop *main_loop)
  * @last_sync: last sync
  *
  * Sets last sync to @last_sync. 
+ *
+ * Since: 0.4
  */
 void
 ags_main_loop_set_last_sync(AgsMainLoop *main_loop, guint last_sync)
@@ -140,9 +166,11 @@ ags_main_loop_set_last_sync(AgsMainLoop *main_loop, guint last_sync)
  * ags_main_loop_get_last_sync:
  * @main_loop: the #AgsMainLoop
  *
- * Retrieve last sync.
+ * Retrieve last sync as tic of synchronization context.
  *
- * Returns: last sync
+ * Returns: last synced tic
+ *
+ * Since: 0.4
  */
 guint
 ags_main_loop_get_last_sync(AgsMainLoop *main_loop)

@@ -1,26 +1,28 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2013 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/X/ags_line_member.h>
 #include <ags/X/ags_line_member_callbacks.h>
 
-#include <ags/object/ags_application_context.h>
-#include <ags/object/ags_connectable.h>
+#include <ags/main.h>
+
+#include <ags-lib/object/ags_connectable.h>
 
 #ifdef AGS_USE_LINUX_THREADS
 #include <ags/thread/ags_thread-kthreads.h>
@@ -29,14 +31,12 @@
 #endif 
 #include <ags/thread/ags_task_thread.h>
 
-#include <ags/audio/ags_audio.h>
 #include <ags/audio/ags_channel.h>
+#include <ags/audio/ags_devout.h>
 
 #include <ags/widget/ags_dial.h>
 
-#include <ags/X/ags_window.h>
-#include <ags/X/ags_line.h>
-#include <ags/X/ags_effect_line.h>
+#include <ags/X/ags_pad.h>
 
 void ags_line_member_class_init(AgsLineMemberClass *line_member);
 void ags_line_member_connectable_interface_init(AgsConnectableInterface *connectable);
@@ -321,7 +321,7 @@ void
 ags_line_member_init(AgsLineMember *line_member)
 {
   GtkWidget *control;
-
+  
   g_signal_connect_after((GObject *) line_member, "parent_set\0",
 			 G_CALLBACK(ags_line_member_parent_set_callback), (gpointer) line_member);
 
@@ -401,7 +401,7 @@ ags_line_member_set_property(GObject *gobject,
       }
 
       line_member->widget_label = g_strdup(label);
-      ags_line_member_set_label(line_member, label);
+      ags_line_member_set_label(line_member, line_member->widget_label);
     }
     break;
   case PROP_PLUGIN_NAME:
@@ -660,7 +660,7 @@ ags_line_member_finalize(GObject *gobject)
 GtkWidget*
 ags_line_member_get_widget(AgsLineMember *line_member)
 {
-  return(gtk_bin_get_child(line_member));
+  return(gtk_bin_get_child(GTK_BIN(line_member)));
 }
 
 /**
@@ -676,17 +676,21 @@ ags_line_member_set_label(AgsLineMember *line_member,
 {
   GtkWidget *child_widget;
 
-  if(g_type_is_a(line_member->widget_type, GTK_TYPE_BUTTON) ||
-     line_member->widget_type == GTK_TYPE_SPIN_BUTTON){
+  if(g_type_is_a(line_member->widget_type,
+		 GTK_TYPE_BUTTON)){
     child_widget = gtk_bin_get_child(GTK_BIN(line_member));
 
     g_object_set(G_OBJECT(child_widget),
 		 "label\0", label,
 		 NULL);
   }else{
-    GtkLabel *label;
-
-    //TODO:JK: implement me
+    gtk_frame_set_label_widget(line_member,
+			       g_object_new(GTK_TYPE_LABEL,
+					    "wrap\0", TRUE,
+					    "wrap-mode\0", PANGO_WRAP_CHAR,
+					    "use-markup\0", TRUE,
+					    "label", g_strdup_printf("<small>%s</small>", label),
+					    NULL));
   }
 
 
@@ -767,27 +771,14 @@ ags_line_member_real_change_port(AgsLineMember *line_member,
   }
 
   if((AGS_LINE_MEMBER_RESET_BY_TASK & (line_member->flags)) != 0){
-    AgsWindow *window;
     AgsLine *line;
-    
-    AgsThread *main_loop;
     AgsTaskThread *task_thread;
     AgsTask *task;
 
-    AgsApplicationContext *application_context;
-
-    //TODO:JK: add support for effect_line
     line = (AgsLine *) gtk_widget_get_ancestor(GTK_WIDGET(line_member),
 					       AGS_TYPE_LINE);
-
-    window = gtk_widget_get_ancestor(line,
-				     AGS_TYPE_WINDOW);
-
-    application_context = window->application_context;
     
-    main_loop = application_context->main_loop;
-    task_thread = ags_thread_find_type(main_loop,
-				       AGS_TYPE_TASK_THREAD);
+    task_thread = AGS_TASK_THREAD(AGS_AUDIO_LOOP(AGS_MAIN(AGS_DEVOUT(line->channel->devout)->ags_main)->main_loop)->task_thread);
 
     task = (AgsTask *) g_object_new(line_member->task_type,
 				    line_member->control_port, port_data,
@@ -831,7 +822,8 @@ ags_line_member_change_port(AgsLineMember *line_member,
 void
 ags_line_member_find_port(AgsLineMember *line_member)
 {
-  GtkWidget *line;
+  AgsMachine *machine;
+  AgsLine *line;
   AgsAudio *audio;
   AgsChannel *channel;
   AgsPort *audio_port, *channel_port;
@@ -877,21 +869,12 @@ ags_line_member_find_port(AgsLineMember *line_member)
     return;
   }
 
-  line = gtk_widget_get_ancestor(GTK_WIDGET(line_member),
-				 AGS_TYPE_LINE);
+  line = (AgsLine *) gtk_widget_get_ancestor(GTK_WIDGET(line_member),
+					     AGS_TYPE_LINE);
 
-  if(line != NULL){
-    channel = AGS_LINE(line)->channel;
-  }else{
-    line = gtk_widget_get_ancestor(GTK_WIDGET(line_member),
-				   AGS_TYPE_EFFECT_LINE);
+  audio = AGS_AUDIO(line->channel->audio);
 
-    if(line != NULL){
-      channel = AGS_EFFECT_LINE(line)->channel;
-    }
-  }
-  
-  audio = AGS_AUDIO(channel->audio);
+  machine = AGS_MACHINE(audio->machine);
 
   audio_port = NULL;
   channel_port = NULL;
@@ -900,6 +883,8 @@ ags_line_member_find_port(AgsLineMember *line_member)
   recall_channel_port = NULL;
   
   /* search channels */
+  channel = line->channel;
+
   recall = channel->play;
   channel_port = ags_line_member_find_specifier(recall);
 

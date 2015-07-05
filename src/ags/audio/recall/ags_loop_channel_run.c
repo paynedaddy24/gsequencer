@@ -1,37 +1,42 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/audio/recall/ags_loop_channel_run.h>
+
+#include <ags/object/ags_dynamic_connectable.h>
+
+#include <ags/main.h>
 
 #include <ags/util/ags_id_generator.h>
 
 #include <ags/lib/ags_list.h>
 
-#include <ags/object/ags_connectable.h>
-#include <ags/object/ags_soundcard.h>
+#include <ags-lib/object/ags_connectable.h>
+
 #include <ags/object/ags_countable.h>
 #include <ags/object/ags_plugin.h>
-#include <ags/object/ags_dynamic_connectable.h>
 
 #include <ags/file/ags_file_stock.h>
 #include <ags/file/ags_file_id_ref.h>
 #include <ags/file/ags_file_lookup.h>
 
+#include <ags/audio/ags_devout.h>
 #include <ags/audio/ags_audio.h>
 #include <ags/audio/ags_recall_container.h>
 #include <ags/audio/ags_recall_id.h>
@@ -222,8 +227,8 @@ void
 ags_loop_channel_run_init(AgsLoopChannelRun *loop_channel_run)
 {
   AGS_RECALL(loop_channel_run)->name = "ags-loop\0";
-  AGS_RECALL(loop_channel_run)->version = AGS_RECALL_DEFAULT_VERSION;
-  AGS_RECALL(loop_channel_run)->build_id = AGS_RECALL_DEFAULT_BUILD_ID;
+  AGS_RECALL(loop_channel_run)->version = AGS_EFFECTS_DEFAULT_VERSION;
+  AGS_RECALL(loop_channel_run)->build_id = AGS_BUILD_ID;
   AGS_RECALL(loop_channel_run)->xml_type = "ags-loop-channel-run\0";
   AGS_RECALL(loop_channel_run)->port = NULL;
 
@@ -572,25 +577,33 @@ ags_loop_channel_run_duplicate(AgsRecall *recall,
 void
 ags_loop_channel_run_create_audio_signals(AgsLoopChannelRun *loop_channel_run)
 {
-  AgsSoundcard *soundcard;
+  AgsDevout *devout;
   AgsRecycling *recycling;
   AgsAudioSignal *audio_signal;
   gdouble delay;
   guint attack;
+  guint tic_counter_incr;
 
   //  g_message("debug\0");
 
-  soundcard = AGS_SOUNDCARD(AGS_RECALL(loop_channel_run)->soundcard);
+  devout = AGS_DEVOUT(AGS_RECALL(loop_channel_run)->devout);
 
   /* recycling */
   recycling = AGS_RECALL_CHANNEL_RUN(loop_channel_run)->source->first_recycling;
 
   /* delay and attack */
-  attack = 0;
-  delay = 0.0;
+  tic_counter_incr = devout->tic_counter + 1;
+
+  //TODO:JK: unclear
+  attack = 0;// devout->attack[((tic_counter_incr == AGS_NOTATION_TICS_PER_BEAT) ?
+  //		   0:
+  //			   tic_counter_incr)];
+  delay = 0.0; //devout->delay[((tic_counter_incr == AGS_NOTATION_TICS_PER_BEAT) ?
+  //		 0:
+  //			 tic_counter_incr)];
 
   while(recycling != AGS_RECALL_CHANNEL_RUN(loop_channel_run)->source->last_recycling->next){
-    audio_signal = ags_audio_signal_new((GObject *) soundcard,
+    audio_signal = ags_audio_signal_new((GObject *) devout,
 					(GObject *) recycling,
 					(GObject *) AGS_RECALL(loop_channel_run)->recall_id);
     audio_signal->stream_current = audio_signal->stream_beginning;

@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/audio/recall/ags_play_channel_run_master.h>
@@ -224,8 +225,8 @@ void
 ags_play_channel_run_master_init(AgsPlayChannelRunMaster *play_channel_run_master)
 {
   AGS_RECALL(play_channel_run_master)->name = "ags-play\0";
-  AGS_RECALL(play_channel_run_master)->version = AGS_RECALL_DEFAULT_VERSION;
-  AGS_RECALL(play_channel_run_master)->build_id = AGS_RECALL_DEFAULT_BUILD_ID;
+  AGS_RECALL(play_channel_run_master)->version = AGS_EFFECTS_DEFAULT_VERSION;
+  AGS_RECALL(play_channel_run_master)->build_id = AGS_BUILD_ID;
   AGS_RECALL(play_channel_run_master)->xml_type = "ags-play-channel-run-master\0";
   AGS_RECALL(play_channel_run_master)->port = NULL;
 
@@ -327,6 +328,10 @@ ags_play_channel_run_master_connect(AgsConnectable *connectable)
   AgsPlayChannelRunMaster *play_channel_run_master;
   GObject *gobject;
 
+  if((AGS_RECALL_CONNECTED & (AGS_RECALL(connectable)->flags)) != 0){
+    return;
+  }
+
   ags_play_channel_run_master_parent_connectable_interface->connect(connectable);
 
   /* AgsPlayChannelRunMaster */
@@ -371,6 +376,10 @@ ags_play_channel_run_master_connect_dynamic(AgsDynamicConnectable *dynamic_conne
   GObject *gobject;
   AgsPlayChannelRunMasterStreamer *streamer;
   GList *list;
+
+  if((AGS_RECALL_DYNAMIC_CONNECTED & (AGS_RECALL(dynamic_connectable)->flags)) != 0){
+    return;
+  }
 
   ags_play_channel_run_master_parent_dynamic_connectable_interface->connect_dynamic(dynamic_connectable);
 
@@ -616,7 +625,7 @@ ags_play_channel_run_master_stream_channel_done_callback(AgsRecall *recall,
   play_channel_run_master = streamer->play_channel_run_master;
 
   play_channel_run_master->streamer = g_list_remove(play_channel_run_master->streamer,
-						    streamer);
+  						    streamer);
 
   if(play_channel_run_master->streamer == NULL){
     //    play_channel_run_master->flags |= AGS_PLAY_CHANNEL_RUN_MASTER_TERMINATING;

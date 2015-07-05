@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2014 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/X/ags_ladspa_browser.h>
@@ -33,15 +34,6 @@
 #include <ags/thread/ags_thread-posix.h>
 #endif 
 #include <ags/thread/ags_task_thread.h>
-
-#include <dlfcn.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/types.h>
-#include <unistd.h>
-
-#include <ladspa.h>
 
 void ags_ladspa_browser_class_init(AgsLadspaBrowserClass *ladspa_browser);
 void ags_ladspa_browser_init(AgsLadspaBrowser *ladspa_browser);
@@ -142,6 +134,12 @@ ags_ladspa_browser_init(AgsLadspaBrowser *ladspa_browser)
 
   GList *list;
   gchar **filenames, **filenames_start;
+
+  ladspa_browser->parent = NULL;
+
+  vbox = (GtkVBox *) gtk_vbox_new(FALSE, 0);
+  gtk_container_add((GtkContainer *) gtk_dialog_get_content_area((GtkDialog *) ladspa_browser),
+		    GTK_WIDGET(vbox));
   
   /* plugin */
   ladspa_browser->plugin = (GtkHBox *) gtk_hbox_new(FALSE, 0);
@@ -232,12 +230,23 @@ ags_ladspa_browser_init(AgsLadspaBrowser *ladspa_browser)
 		     FALSE, FALSE,
 		     0);
   
-  table = gtk_table_new(256, 2,
-			FALSE);
+  table = (GtkTable *) gtk_table_new(256, 2,
+				     FALSE);
   gtk_box_pack_start(GTK_BOX(ladspa_browser->description),
 		     GTK_WIDGET(table),
 		     FALSE, FALSE,
 		     0);
+
+  /* action area */
+  gtk_dialog_add_buttons((GtkDialog *) ladspa_browser,
+			 GTK_STOCK_OK, GTK_RESPONSE_ACCEPT,
+			 GTK_STOCK_CANCEL, GTK_RESPONSE_REJECT,
+			 NULL);
+
+  list = gtk_container_get_children((GtkContainer *) gtk_dialog_get_action_area((GtkDialog *) ladspa_browser));
+  ladspa_browser->ok = GTK_BUTTON(list->data);
+  ladspa_browser->cancel = GTK_BUTTON(list->next->data);
+  g_list_free(list);
 }
 
 void
@@ -300,10 +309,10 @@ ags_ladspa_browser_reset(AgsApplicable *applicable)
 
   list = gtk_container_get_children(GTK_CONTAINER(ladspa_browser->plugin));
 
-  filename = GTK_COMBO_BOX(list->next->data);
+  filename = GTK_COMBO_BOX_TEXT(list->next->data);
   g_list_free(list);
 
-  gtk_combo_box_set_active(filename,
+  gtk_combo_box_set_active((GtkComboBox *) filename,
 			   0);
 }
 
@@ -341,55 +350,40 @@ ags_ladspa_browser_get_plugin_filename(AgsLadspaBrowser *ladspa_browser)
 gchar*
 ags_ladspa_browser_get_plugin_effect(AgsLadspaBrowser *ladspa_browser)
 {
-  GtkComboBoxText *filename, *effect;
-  AgsLadspaPlugin *ladspa_plugin;
-  GList *list, *list_start;
-  gchar *effect_name;
-
-  void *plugin_so;
-  LADSPA_Descriptor_Function ladspa_descriptor;
-  LADSPA_Descriptor *plugin_descriptor;
-  unsigned long index;
-
-  /* retrieve filename and effect */
-  list_start = 
-    list = gtk_container_get_children(GTK_CONTAINER(ladspa_browser->plugin));
-
-  filename = GTK_COMBO_BOX(list->next->data);
-  effect = GTK_COMBO_BOX(list->next->next->next->data);
-
-  g_list_free(list_start);
-
-  /* update description */
-  list_start = 
-    list = gtk_container_get_children(GTK_CONTAINER(ladspa_browser->description));
-
-  ags_ladspa_manager_load_file(gtk_combo_box_text_get_active_text(filename));
-  ladspa_plugin = ags_ladspa_manager_find_ladspa_plugin(gtk_combo_box_text_get_active_text(filename));
+  GtkComboBoxText *effect;
+  GList *list;
+  gchar *str;
   
-  plugin_so = ladspa_plugin->plugin_so;
-
-  effect_name = NULL;
+  list = gtk_container_get_children(GTK_CONTAINER(ladspa_browser->plugin));
+  effect = GTK_COMBO_BOX_TEXT(list->next->next->next->data);
+  g_list_free(list);
   
-  index = (unsigned long) gtk_combo_box_get_active(effect);
+  str = gtk_combo_box_text_get_active_text(effect);
+  str = &(str[6]);
   
-  if(index != -1 &&
-     plugin_so){
-    ladspa_descriptor = (LADSPA_Descriptor_Function) dlsym(plugin_so,
-							   "ladspa_descriptor\0");
+  return(str);
+}
 
-    if(dlerror() == NULL && ladspa_descriptor){
-      plugin_descriptor = ladspa_descriptor(index);
+GtkWidget*
+ags_ladspa_browser_combo_box_boolean_controls_new()
+{
+  GtkComboBoxText *combo_box;
 
-      effect_name = plugin_descriptor->Name;
-    }
-  }
+  combo_box = (GtkComboBoxText *) gtk_combo_box_text_new();
 
-  return(effect_name);
+  gtk_combo_box_text_append_text(combo_box,
+				 "toggle button\0");
+  gtk_combo_box_text_append_text(combo_box,
+				 "check button\0");
+
+  gtk_combo_box_set_active((GtkComboBox *) combo_box,
+			   1);
+
+  return((GtkWidget *) combo_box);
 }
 
 /**
- * ags_ladspa_browser_combo_box_controls_new:
+ * ags_ladspa_browser_combo_box_float_controls_new:
  *
  * Creates a #GtkComboBox containing suitable widgets as controls.
  *
@@ -398,7 +392,7 @@ ags_ladspa_browser_get_plugin_effect(AgsLadspaBrowser *ladspa_browser)
  * Since: 0.4.2
  */
 GtkWidget*
-ags_ladspa_browser_combo_box_controls_new()
+ags_ladspa_browser_combo_box_float_controls_new()
 {
   GtkComboBoxText *combo_box;
 
@@ -410,13 +404,11 @@ ags_ladspa_browser_combo_box_controls_new()
 				 "dial\0");
   gtk_combo_box_text_append_text(combo_box,
 				 "vertical scale\0");
-  gtk_combo_box_text_append_text(combo_box,
-				 "horizontal scale\0");
 
-  gtk_combo_box_set_active(combo_box,
+  gtk_combo_box_set_active((GtkComboBox *) combo_box,
 			   1);
 
-  return(combo_box);
+  return((GtkWidget *) combo_box);
 }
 
 GtkWidget*

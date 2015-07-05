@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2014 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/X/task/ags_add_line_member.h>
@@ -22,9 +23,6 @@
 
 #include <ags/audio/ags_audio.h>
 #include <ags/audio/ags_channel.h>
-
-#include <ags/X/ags_line.h>
-#include <ags/X/ags_effect_line.h>
 
 void ags_add_line_member_class_init(AgsAddLineMemberClass *add_line_member);
 void ags_add_line_member_connectable_interface_init(AgsConnectableInterface *connectable);
@@ -155,23 +153,11 @@ ags_add_line_member_launch(AgsTask *task)
 
   add_line_member = AGS_ADD_LINE_MEMBER(task);
 
-  if(AGS_IS_LINE(add_line_member->line)){
-    ags_expander_add(AGS_LINE(add_line_member->line)->expander,
-		     add_line_member->line_member,
-		     add_line_member->x, add_line_member->y,
-		     add_line_member->width, add_line_member->height);
-  }else if(AGS_IS_EFFECT_LINE(add_line_member->line)){
-    gtk_table_attach(AGS_EFFECT_LINE(add_line_member->line)->table,
-		     add_line_member->line_member,
-		     add_line_member->x, add_line_member->x + add_line_member->width,
-		     add_line_member->y, add_line_member->y + add_line_member->height,
-		     GTK_FILL, GTK_FILL,
-		     0, 0);
-    gtk_widget_show_all(AGS_EFFECT_LINE(add_line_member->line)->table);
-  }else{
-    g_warning("ags_add_line_member.c - unknow line type");
-  }
-  
+  ags_expander_add(add_line_member->line->expander,
+		   (GtkWidget *) add_line_member->line_member,
+		   add_line_member->x, add_line_member->y,
+		   add_line_member->width, add_line_member->height);
+
   ags_line_member_find_port(add_line_member->line_member);
 
   //  gtk_widget_set_child_visible(GTK_BIN(add_line_member->line->expander)->child,
@@ -180,7 +166,7 @@ ags_add_line_member_launch(AgsTask *task)
 
 /**
  * ags_add_line_member_new:
- * @line: the #AgsLine or #AgsEffectLine
+ * @line: the #AgsLine
  * @line_member: the #AgsLineMember to add
  * @x: pack start x
  * @y: pack start y
@@ -194,7 +180,7 @@ ags_add_line_member_launch(AgsTask *task)
  * Since: 0.4
  */
 AgsAddLineMember*
-ags_add_line_member_new(GtkWidget *line,
+ags_add_line_member_new(AgsLine *line,
 			AgsLineMember *line_member,
 			guint x, guint y,
 			guint width, guint height)

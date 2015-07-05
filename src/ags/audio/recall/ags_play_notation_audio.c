@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2013 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/audio/recall/ags_play_notation_audio.h>
@@ -141,8 +142,8 @@ ags_play_notation_audio_init(AgsPlayNotationAudio *play_notation_audio)
   GList *port;
 
   AGS_RECALL(play_notation_audio)->name = "ags-play-notation\0";
-  AGS_RECALL(play_notation_audio)->version = AGS_RECALL_DEFAULT_VERSION;
-  AGS_RECALL(play_notation_audio)->build_id = AGS_RECALL_DEFAULT_BUILD_ID;
+  AGS_RECALL(play_notation_audio)->version = AGS_EFFECTS_DEFAULT_VERSION;
+  AGS_RECALL(play_notation_audio)->build_id = AGS_BUILD_ID;
   AGS_RECALL(play_notation_audio)->xml_type = "ags-play-notation-audio\0";
 
   port = NULL;
@@ -155,7 +156,7 @@ ags_play_notation_audio_init(AgsPlayNotationAudio *play_notation_audio)
 					       "port-value-type\0", G_TYPE_POINTER,
 					       "port-value-size\0", sizeof(gpointer),
 					       "port-value-length\0", 1,
-						    NULL);
+					       NULL);
   play_notation_audio->notation->port_value.ags_port_pointer = NULL;
 
   port = g_list_prepend(port, play_notation_audio->notation);

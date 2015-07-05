@@ -1,28 +1,32 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/audio/task/ags_append_channel.h>
 
-#include <ags/object/ags_application_context.h>
-#include <ags/object/ags_connectable.h>
+#include <ags-lib/object/ags_connectable.h>
 
-#include <ags/server/ags_server_application_context.h>
-#include <ags/server/ags_server.h>
+#include <ags/main.h>
+
+#include <ags/thread/ags_channel_thread.h>
+
+#include <ags/audio/ags_config.h>
+#include <ags/audio/ags_devout.h>
 
 #include <ags/audio/thread/ags_audio_loop.h>
 
@@ -47,6 +51,8 @@ void ags_append_channel_launch(AgsTask *task);
 
 static gpointer ags_append_channel_parent_class = NULL;
 static AgsConnectableInterface *ags_append_channel_parent_connectable_interface;
+
+extern AgsConfig *config;
 
 GType
 ags_append_channel_get_type()
@@ -147,35 +153,44 @@ ags_append_channel_finalize(GObject *gobject)
 void
 ags_append_channel_launch(AgsTask *task)
 {
-  AgsApplicationContext *application_context;
+  AgsChannel *channel;
   AgsServer *server;
   AgsAppendChannel *append_channel;
   AgsAudioLoop *audio_loop;
-
-  GList *list;
-
+  
   append_channel = AGS_APPEND_CHANNEL(task);
 
   audio_loop = AGS_AUDIO_LOOP(append_channel->audio_loop);
-
-  application_context = AGS_APPLICATION_CONTEXT(audio_loop->application_context);
+  channel = append_channel->channel;
   
   /* append to AgsDevout */
   ags_audio_loop_add_channel(audio_loop,
-			     append_channel->channel);
+			    channel);
 
-  /* add to server registry */
-  server = NULL;
-  list = application_context->sibling;
-
-  while(list != NULL){
-    if(AGS_IS_SERVER_APPLICATION_CONTEXT(list->data)){
-      server = AGS_SERVER_APPLICATION_CONTEXT(list->data)->server;
-      break;
+  /**/  
+  if(!g_ascii_strncasecmp(ags_config_get(config,
+					 AGS_CONFIG_THREAD,
+					 "model\0"),
+			  "super-threaded\0",
+			  15)){
+    /* super threaed setup */
+    if(!g_ascii_strncasecmp(ags_config_get(config,
+					   AGS_CONFIG_THREAD,
+					   "super-threaded-scope\0"),
+				  "channel\0",
+			    8)){
+      if(AGS_DEVOUT_PLAY(channel->devout_play)->channel_thread[0]->parent == NULL &&
+	 (AGS_DEVOUT_PLAY_PLAYBACK & (g_atomic_int_get(&(AGS_DEVOUT_PLAY(channel->devout_play)->flags)))) != 0){
+	ags_thread_add_child_extended(audio_loop,
+				      AGS_DEVOUT_PLAY(channel->devout_play)->channel_thread[0],
+				      TRUE, TRUE);
+	ags_connectable_connect(AGS_CONNECTABLE(AGS_DEVOUT_PLAY(channel->devout_play)->channel_thread[0]));
+      }
     }
-
-    list = list->next;
   }
+  
+  /* add to server registry */
+  server = AGS_MAIN(audio_loop->ags_main)->server;
 
   if(server != NULL && (AGS_SERVER_RUNNING & (server->flags)) != 0){
     ags_connectable_add_to_registry(AGS_CONNECTABLE(append_channel->channel));

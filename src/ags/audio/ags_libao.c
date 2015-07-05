@@ -1,25 +1,25 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2014 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/audio/ags_libao.h>
 
-#include <ags/object/ags_application_context.h>
-#include <ags/object/ags_connectable.h>
+#include <ags-lib/object/ags_connectable.h>
 
 #include <ags/main.h>
 
@@ -56,7 +56,7 @@ void ags_libao_output_free(AgsLibao *libao);
 
 enum{
   PROP_0,
-  PROP_APPLICATION_CONTEXT,
+  PROP_MAIN,
   PROP_DEVICE,
   PROP_DSP_CHANNELS,
   PROP_PCM_CHANNELS,
@@ -135,13 +135,13 @@ ags_libao_class_init(AgsLibaoClass *libao)
   gobject->finalize = ags_libao_finalize;
 
   /* properties */
-  param_spec = g_param_spec_object("application-context\0",
-				   "the application context object\0",
-				   "The application context object\0",
-				   AGS_TYPE_APPLICATION_CONTEXT,
+  param_spec = g_param_spec_object("main\0",
+				   "the main object\0",
+				   "The main object\0",
+				   AGS_TYPE_MAIN,
 				   G_PARAM_READABLE | G_PARAM_WRITABLE);
   g_object_class_install_property(gobject,
-				  PROP_APPLICATION_CONTEXT,
+				  PROP_MAIN,
 				  param_spec);
 
   param_spec = g_param_spec_string("device\0",
@@ -302,8 +302,8 @@ ags_libao_init(AgsLibao *libao)
   libao->bpm = AGS_LIBAO_DEFAULT_BPM;
 
   /* delay and attack */
-  libao->delay = (guint *) malloc((int) ceil(2.0 * AGS_NOTATION_TICS_PER_BEAT) *
-				   sizeof(gdouble));
+  libao->delay = (gdouble *) malloc((int) ceil(2.0 * AGS_NOTATION_TICS_PER_BEAT) *
+				    sizeof(gdouble));
 
   libao->attack = (guint *) malloc((int) ceil(2.0 * AGS_NOTATION_TICS_PER_BEAT) *
 				   sizeof(guint));
@@ -327,7 +327,7 @@ ags_libao_init(AgsLibao *libao)
   libao->tic_counter = 0;
 
   /* parent */
-  libao->application_context = NULL;
+  libao->ags_main = NULL;
 
   /* all AgsAudio */
   libao->audio = NULL;
@@ -346,25 +346,25 @@ ags_libao_set_property(GObject *gobject,
   //TODO:JK: implement set functionality
   
   switch(prop_id){
-  case PROP_APPLICATION_CONTEXT:
+  case PROP_MAIN:
     {
-      AgsApplicationContext *application_context;
+      AgsMain *ags_main;
 
-      application_context = g_value_get_object(value);
+      ags_main = (AgsMain *) g_value_get_object(value);
 
-      if(libao->application_context == application_context){
+      if((AgsMain *) libao->ags_main == ags_main){
 	return;
       }
 
-      if(libao->application_context != NULL){
-	g_object_unref(G_OBJECT(libao->application_context));
+      if(libao->ags_main != NULL){
+	g_object_unref(G_OBJECT(libao->ags_main));
       }
 
-      if(application_context != NULL){
-	g_object_ref(G_OBJECT(application_context));
+      if(ags_main != NULL){
+	g_object_ref(G_OBJECT(ags_main));
       }
 
-      libao->application_context = application_context;
+      libao->ags_main = (AgsMain *) ags_main;
     }
     break;
   case PROP_DEVICE:
@@ -772,7 +772,7 @@ ags_libao_output_play(AgsLibao *libao,
   */
 
   /* determine if attack should be switched */
-  libao->delay_counter += (AGS_LIBAO_DEFAULT_DELAY *
+  libao->delay_counter += (AGS_DEVOUT_DEFAULT_DELAY *
 			   AGS_NOTATION_MINIMUM_NOTE_LENGTH);
 
   if(libao->delay_counter >= libao->delay[libao->tic_counter]){
@@ -800,13 +800,16 @@ ags_libao_output_free(AgsLibao *libao)
 }
 
 AgsLibao*
-ags_libao_new(GObject *application_context)
+ags_libao_new(GObject *ags_main)
 {
   AgsLibao *libao;
 
-  libao = (AgsLibao *) g_object_new(AGS_TYPE_LIBAO,
-				    "application-context", application_context,
-				    NULL);  
+  libao = (AgsLibao *) g_object_new(AGS_TYPE_LIBAO, NULL);
+  
+  if(ags_main != NULL){
+    g_object_ref(G_OBJECT(ags_main));
+    libao->ags_main = ags_main;
+  }
 
   return(libao);
 }

@@ -1,32 +1,33 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/audio/file/ags_playable.h>
 
-#include <ags/object/ags_application_context.h>
-#include <ags/object/ags_config.h>
-#include <ags/object/ags_connectable.h>
+#include <ags-lib/object/ags_connectable.h>
 
-#include <ags/audio/ags_audio_signal.h>
+#include <ags/audio/ags_config.h>
 
 #include <math.h>
 
 void ags_playable_base_init(AgsPlayableInterface *interface);
+
+extern AgsConfig *config;
 
 /**
  * SECTION:ags_playable
@@ -714,8 +715,6 @@ ags_playable_read_audio_signal(AgsPlayable *playable,
 			       guint start_channel, guint channels_to_read)
 {
   AgsAudioSignal *audio_signal;
-  AgsApplicationContext *application_context;
-  AgsConfig *config;
   GList *stream, *list, *list_beginning;
   short *buffer;
   guint channels;
@@ -731,22 +730,19 @@ ags_playable_read_audio_signal(AgsPlayable *playable,
   g_return_val_if_fail(AGS_IS_PLAYABLE(playable),
 		       NULL);
 
-  application_context = ags_soundcard_get_application_context(soundcard);
-  config = application_context->config;
-  
   ags_playable_info(playable,
 		    &channels, &frames,
 		    &loop_start, &loop_end,
 		    &error);
 
-  samplerate = g_ascii_strtoull(ags_config_get_value(config,
-						     AGS_CONFIG_SOUNDCARD,
-						     "samplerate\0"),
+  samplerate = g_ascii_strtoull(ags_config_get(config,
+					       AGS_CONFIG_DEVOUT,
+					       "samplerate\0"),
 				NULL,
 				10);
-  buffer_size = g_ascii_strtoull(ags_config_get_value(config,
-						      AGS_CONFIG_SOUNDCARD,
-						      "buffer-size\0"),
+  buffer_size = g_ascii_strtoull(ags_config_get(config,
+						AGS_CONFIG_DEVOUT,
+						"buffer-size\0"),
 				 NULL,
 				 10);
   length = (guint) ceil((double)(frames) / (double)(buffer_size));

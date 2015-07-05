@@ -1,28 +1,31 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2014 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/audio/ags_recall_channel_run_dummy.h>
 #include <ags/audio/ags_recall_recycling_dummy.h>
 
+#include <ags-lib/object/ags_connectable.h>
+
+#include <ags/main.h>
+
 #include <ags/util/ags_id_generator.h>
 
-#include <ags/object/ags_application_context.h>
-#include <ags/object/ags_connectable.h>
 #include <ags/object/ags_dynamic_connectable.h>
 #include <ags/object/ags_plugin.h>
 
@@ -178,8 +181,8 @@ void
 ags_recall_channel_run_dummy_init(AgsRecallChannelRunDummy *recall_channel_run_dummy)
 {
   AGS_RECALL(recall_channel_run_dummy)->name = "ags-dummy";
-  AGS_RECALL(recall_channel_run_dummy)->version = AGS_RECALL_DEFAULT_VERSION;
-  AGS_RECALL(recall_channel_run_dummy)->build_id = AGS_RECALL_DEFAULT_BUILD_ID;
+  AGS_RECALL(recall_channel_run_dummy)->version = AGS_EFFECTS_DEFAULT_VERSION;
+  AGS_RECALL(recall_channel_run_dummy)->build_id = AGS_BUILD_ID;
   AGS_RECALL(recall_channel_run_dummy)->xml_type = "ags-recall-channel-run-dummy\0";
   AGS_RECALL(recall_channel_run_dummy)->port = NULL;
 
@@ -275,7 +278,7 @@ ags_recall_channel_run_dummy_read(AgsFile *file, xmlNode *node, AgsPlugin *plugi
 
   ags_file_add_id_ref(file,
 		      g_object_new(AGS_TYPE_FILE_ID_REF,
-				   "application-context\0", file->application_context,
+				   "main\0", file->ags_main,
 				   "file\0", file,
 				   "node\0", node,
 				   "xpath\0", g_strdup_printf("xpath=//*[@id='%s']\0", xmlGetProp(node, AGS_FILE_ID_PROP)),
@@ -305,7 +308,7 @@ ags_recall_channel_run_dummy_write(AgsFile *file, xmlNode *parent, AgsPlugin *pl
 
   ags_file_add_id_ref(file,
 		      g_object_new(AGS_TYPE_FILE_ID_REF,
-				   "application-context\0", file->application_context,
+				   "main\0", file->ags_main,
 				   "file\0", file,
 				   "node\0", node,
 				   "xpath\0", g_strdup_printf("xpath=//*[@id='%s']\0", id),

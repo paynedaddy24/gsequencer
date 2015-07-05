@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/X/ags_menu_bar.h>
@@ -165,22 +166,22 @@ ags_menu_bar_init(AgsMenuBar *menu_bar)
   menu_bar->add = (GtkMenu *) gtk_menu_new();
   gtk_menu_item_set_submenu((GtkMenuItem*) item, (GtkWidget*) menu_bar->add);
 
-  item = (GtkImageMenuItem *) gtk_image_menu_item_new_with_label("Panel\0");
+  item = (GtkImageMenuItem *) gtk_image_menu_item_new_with_label(g_strdup("Panel\0"));
   gtk_menu_shell_append((GtkMenuShell*) menu_bar->add, (GtkWidget*) item);
 
-  item = (GtkImageMenuItem *) gtk_image_menu_item_new_with_label("Mixer\0");
+  item = (GtkImageMenuItem *) gtk_image_menu_item_new_with_label(g_strdup("Mixer\0"));
   gtk_menu_shell_append((GtkMenuShell*) menu_bar->add, (GtkWidget*) item);
 
-  item = (GtkImageMenuItem *) gtk_image_menu_item_new_with_label("Drum\0");
+  item = (GtkImageMenuItem *) gtk_image_menu_item_new_with_label(g_strdup("Drum\0"));
   gtk_menu_shell_append((GtkMenuShell*) menu_bar->add, (GtkWidget*) item);
 
-  item = (GtkImageMenuItem *) gtk_image_menu_item_new_with_label("Matrix\0");
+  item = (GtkImageMenuItem *) gtk_image_menu_item_new_with_label(g_strdup("Matrix\0"));
   gtk_menu_shell_append((GtkMenuShell*) menu_bar->add, (GtkWidget*) item);
 
-  item = (GtkImageMenuItem *) gtk_image_menu_item_new_with_label("Synth\0");
+  item = (GtkImageMenuItem *) gtk_image_menu_item_new_with_label(g_strdup("Synth\0"));
   gtk_menu_shell_append((GtkMenuShell*) menu_bar->add, (GtkWidget*) item);
 
-  item = (GtkImageMenuItem *) gtk_image_menu_item_new_with_label("FPlayer\0");
+  item = (GtkImageMenuItem *) gtk_image_menu_item_new_with_label(g_strdup("FPlayer\0"));
   gtk_menu_shell_append((GtkMenuShell*) menu_bar->add, (GtkWidget*) item);
 
   item = (GtkImageMenuItem *) gtk_image_menu_item_new_with_label("bridge\0");
@@ -216,12 +217,6 @@ ags_menu_bar_init(AgsMenuBar *menu_bar)
   
   /* edit */
   item = (GtkImageMenuItem *) gtk_image_menu_item_new_from_stock(GTK_STOCK_REMOVE, NULL);
-  gtk_menu_shell_append((GtkMenuShell*) menu_bar->edit, (GtkWidget*) item);
-
-  gtk_menu_shell_append((GtkMenuShell*) menu_bar->edit,
-			(GtkWidget*) gtk_separator_menu_item_new());
-
-  item = (GtkImageMenuItem *) gtk_image_menu_item_new_with_label("Automation Editor\0");
   gtk_menu_shell_append((GtkMenuShell*) menu_bar->edit, (GtkWidget*) item);
 
   gtk_menu_shell_append((GtkMenuShell*) menu_bar->edit,
@@ -377,13 +372,8 @@ ags_menu_bar_connect(AgsConnectable *connectable)
   list1 = list1->next;
   list1 = list1->next;
 
-  g_signal_connect(G_OBJECT(list1->data), "activate\0",
-		   G_CALLBACK(ags_menu_bar_automation_window_callback), (gpointer) menu_bar);
-  list1 = list1->next;
-  list1 = list1->next;
-
-  g_signal_connect(G_OBJECT(list1->data), "activate\0",
-		   G_CALLBACK(ags_menu_bar_preferences_callback), (gpointer) menu_bar);
+  g_signal_connect (G_OBJECT (list1->data), "activate\0",
+                    G_CALLBACK (ags_menu_bar_preferences_callback), (gpointer) menu_bar);
 
   g_list_free(list1_start);
 
@@ -430,8 +420,7 @@ ags_menu_bar_new()
 {
   AgsMenuBar *menu_bar;
 
-  menu_bar = (AgsMenuBar *) g_object_new(AGS_TYPE_MENU_BAR,
-					 NULL);
+  menu_bar = (AgsMenuBar *) g_object_new(AGS_TYPE_MENU_BAR, NULL);
 
   return(menu_bar);
 }
@@ -715,12 +704,12 @@ ags_zoom_combo_box_new()
 {
   GtkComboBoxText *combo_box;
 
-  combo_box = gtk_combo_box_text_new();
+  combo_box = (GtkComboBoxText *) gtk_combo_box_text_new();
 
-  gtk_combo_box_text_append_text(combo_box,
-				 "16:1\0");
-  gtk_combo_box_text_append_text(combo_box,
-				 "8:1\0");
+  //  gtk_combo_box_text_append_text(combo_box,
+  //				 "16:1\0");
+  //  gtk_combo_box_text_append_text(combo_box,
+  //				 "8:1\0");
   gtk_combo_box_text_append_text(combo_box,
 				 "4:1\0");
   gtk_combo_box_text_append_text(combo_box,
@@ -736,7 +725,7 @@ ags_zoom_combo_box_new()
   gtk_combo_box_text_append_text(combo_box,
 				 "1:16\0");
 
-  return(combo_box);
+  return((GtkComboBox *) combo_box);
 }
 
 /**
@@ -753,7 +742,7 @@ ags_tact_combo_box_new()
 {
   GtkComboBoxText *combo_box;
 
-  combo_box = gtk_combo_box_text_new();
+  combo_box = (GtkComboBoxText *) gtk_combo_box_text_new();
 
   gtk_combo_box_text_append_text(combo_box,
 				 "16/1\0");
@@ -774,5 +763,5 @@ ags_tact_combo_box_new()
   gtk_combo_box_text_append_text(combo_box,
 				 "1/16\0");
 
-  return(combo_box);
+  return((GtkComboBox *) combo_box);
 }

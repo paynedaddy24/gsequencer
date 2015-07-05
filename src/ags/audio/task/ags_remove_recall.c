@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/audio/task/ags_remove_recall.h>
@@ -156,10 +157,6 @@ ags_remove_recall_launch(AgsTask *task)
   remove_recall = AGS_REMOVE_RECALL(task);
 
   if(AGS_IS_AUDIO(remove_recall->context)){
-    ags_audio_remove_recall(AGS_AUDIO(remove_recall->context),
-			    remove_recall->recall,
-			    remove_recall->is_play);
-
     if(remove_recall->remove_all){
       GList *list;
 
@@ -167,19 +164,22 @@ ags_remove_recall_launch(AgsTask *task)
 	list = AGS_RECALL_CONTAINER(remove_recall->recall->container)->recall_audio_run;
 
 	while(list != NULL){
-          ags_audio_remove_recall(AGS_AUDIO(remove_recall->context),
-			    list->data,
-			    remove_recall->is_play);
-
+	  if(list->data != remove_recall->recall){
+	    ags_audio_remove_recall(AGS_AUDIO(remove_recall->context),
+				    (GObject *) list->data,
+				    remove_recall->is_play);
+	  }
+	  
 	  list = list->next;	  
 	}
       }
     }
-  }else if(AGS_IS_CHANNEL(remove_recall->context)){
-    ags_channel_remove_recall(AGS_CHANNEL(remove_recall->context),
-			      remove_recall->recall,
-			      remove_recall->is_play);
 
+    ags_audio_remove_recall(AGS_AUDIO(remove_recall->context),
+			    (GObject *) remove_recall->recall,
+			    remove_recall->is_play);
+
+  }else if(AGS_IS_CHANNEL(remove_recall->context)){
     if(remove_recall->remove_all){
       GList *list;
 
@@ -187,14 +187,20 @@ ags_remove_recall_launch(AgsTask *task)
 	list = AGS_RECALL_CONTAINER(remove_recall->recall->container)->recall_channel_run;
 
 	while(list != NULL){
-	  ags_channel_remove_recall(AGS_CHANNEL(remove_recall->context),
-				    list->data,
-				    remove_recall->is_play);
-
+	  if(list->data != remove_recall->recall){
+	    ags_channel_remove_recall(AGS_CHANNEL(remove_recall->context),
+				      (GObject *) list->data,
+				      remove_recall->is_play);
+	  }
+	  
 	  list = list->next;
 	}
-      }      
+      }
     }
+
+    ags_channel_remove_recall(AGS_CHANNEL(remove_recall->context),
+			      (GObject *) remove_recall->recall,
+			      remove_recall->is_play);
   }else if(AGS_IS_RECALL(remove_recall->context)){
     ags_recall_remove_child(AGS_RECALL(remove_recall->context),
 			    remove_recall->recall);

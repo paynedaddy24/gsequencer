@@ -1,31 +1,35 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2014 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/audio/ags_recall_ladspa.h>
 #include <ags/audio/ags_recall_ladspa_run.h>
 
-#include <ags/object/ags_application_context.h>
-#include <ags/object/ags_config.h>
-#include <ags/object/ags_connectable.h>
+#include <ags/main.h>
+
+#include <ags-lib/object/ags_connectable.h>
+
 #include <ags/object/ags_plugin.h>
 
 #include <ags/plugin/ags_ladspa_manager.h>
 
+#include <ags/audio/ags_config.h>
+#include <ags/audio/ags_devout.h>
 #include <ags/audio/ags_port.h>
 
 #include <dlfcn.h>
@@ -57,6 +61,7 @@ void ags_recall_ladspa_run_load_ports(AgsRecallLadspaRun *recall_ladspa_run);
  * #AgsRecallLadspaRun provides LADSPA support.
  */
 
+extern AgsConfig *config;
 static gpointer ags_recall_ladspa_run_parent_class = NULL;
 static AgsConnectableInterface* ags_recall_ladspa_run_parent_connectable_interface;
 
@@ -186,7 +191,6 @@ ags_recall_ladspa_run_run_init_pre(AgsRecall *recall)
   AgsRecallLadspa *recall_ladspa;
   AgsRecallLadspaRun *recall_ladspa_run;
   AgsAudioSignal *audio_signal;
-  AgsConfig *config;
   unsigned long samplerate;
   unsigned long buffer_size;
   unsigned long i;
@@ -196,13 +200,18 @@ ags_recall_ladspa_run_run_init_pre(AgsRecall *recall)
 
   recall_ladspa_run = AGS_RECALL_LADSPA_RUN(recall);
   recall_ladspa = AGS_RECALL_LADSPA(AGS_RECALL_CHANNEL_RUN(recall->parent->parent)->recall_channel);
-  
-  /* set up buffer */
-  audio_signal = AGS_RECALL_AUDIO_SIGNAL(recall_ladspa_run)->source;
-  
+
   /* set up buffer */ 
-  samplerate = audio_signal->samplerate;
-  buffer_size = audio_signal->buffer_size;
+  samplerate = (unsigned long) g_ascii_strtoull(ags_config_get(config,
+							       AGS_CONFIG_DEVOUT,
+							       "samplerate\0"),
+						NULL,
+						10);
+  buffer_size = (unsigned long) g_ascii_strtoull(ags_config_get(config,
+								AGS_CONFIG_DEVOUT,
+								"buffer-size\0"),
+						 NULL,
+						 10);
 
   recall_ladspa_run->input = (LADSPA_Data *) malloc(recall_ladspa->input_lines *
 						    buffer_size *
@@ -363,7 +372,7 @@ ags_recall_ladspa_run_load_ports(AgsRecallLadspaRun *recall_ladspa_run)
 	}
 
 	for(j = 0; j < recall_ladspa->input_lines; j++){
-	  g_message("connecting port[%d]: %d/%d\0", j, i, port_count);
+	  //	  g_message("connecting port[%d]: %d/%d\0", j, i, port_count);
 	  port_data = &(current->port_value.ags_port_float);
 	  recall_ladspa->plugin_descriptor->connect_port(recall_ladspa_run->ladspa_handle[j],
 							 i,

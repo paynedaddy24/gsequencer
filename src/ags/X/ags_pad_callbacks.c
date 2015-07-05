@@ -1,26 +1,27 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/X/ags_pad_callbacks.h>
 
-#include <ags/object/ags_application_context.h>
+#include <ags/main.h>
 
-#include <ags/thread/ags_thread-posix.h>
+#include <ags/thread/ags_audio_loop.h>
 #include <ags/thread/ags_task_thread.h>
 
 #include <ags/audio/ags_audio.h>
@@ -29,7 +30,6 @@
 
 #include <ags/audio/task/recall/ags_set_muted.h>
 
-#include <ags/X/ags_window.h>
 #include <ags/X/ags_machine.h>
 
 int
@@ -97,29 +97,16 @@ ags_pad_group_clicked_callback(GtkWidget *widget, AgsPad *pad)
 int
 ags_pad_mute_clicked_callback(GtkWidget *widget, AgsPad *pad)
 {
-  AgsWindow *window;
   AgsMachine *machine;
   GtkContainer *container;
-  AgsChannel *channel;
-  AgsSetMuted *set_muted;
-  AgsThread *main_loop, *current;
   AgsTaskThread *task_thread;
-  AgsApplicationContext *application_context;
+  AgsChannel *current;
+  AgsSetMuted *set_muted;
   GList *list, *list_start, *tasks;
 
-  machine = (AgsMachine *) gtk_widget_get_ancestor((GtkWidget *) pad,
-						   AGS_TYPE_MACHINE);
+  task_thread = AGS_TASK_THREAD(AGS_AUDIO_LOOP(AGS_MAIN(AGS_DEVOUT(AGS_AUDIO(pad->channel->audio)->devout)->ags_main)->main_loop)->task_thread);
 
-  window = gtk_widget_get_ancestor((GtkWidget *) pad,
-				   AGS_TYPE_WINDOW);
-
-  application_context = window->application_context;
-  
-  main_loop = application_context->main_loop;
-
-  task_thread = NULL;
-  
-  channel = pad->channel;
+  current = pad->channel;
   tasks = NULL;
 
   if(gtk_toggle_button_get_active(pad->mute)){
@@ -127,14 +114,16 @@ ags_pad_mute_clicked_callback(GtkWidget *widget, AgsPad *pad)
       gtk_toggle_button_set_active(pad->solo, FALSE);
 
     /* mute */
-    while(channel != pad->channel->next_pad){
-      set_muted = ags_set_muted_new(G_OBJECT(channel),
+    while(current != pad->channel->next_pad){
+      set_muted = ags_set_muted_new(G_OBJECT(current),
 				    TRUE);
       tasks = g_list_prepend(tasks, set_muted);
 
-      channel = channel->next;
+      current = current->next;
     }
   }else{
+    machine = (AgsMachine *) gtk_widget_get_ancestor((GtkWidget *) pad, AGS_TYPE_MACHINE);
+
     if((AGS_MACHINE_SOLO & (machine->flags)) != 0){
       container = (GtkContainer *) (AGS_IS_OUTPUT(pad->channel) ? machine->output: machine->input);
       list_start = 
@@ -151,12 +140,12 @@ ags_pad_mute_clicked_callback(GtkWidget *widget, AgsPad *pad)
     }
 
     /* unmute */
-    while(channel != pad->channel->next_pad){
-      set_muted = ags_set_muted_new(G_OBJECT(channel),
+    while(current != pad->channel->next_pad){
+      set_muted = ags_set_muted_new(G_OBJECT(current),
 				    FALSE);
       tasks = g_list_prepend(tasks, set_muted);
 
-      channel = channel->next;
+      current = current->next;
     }
   }
 

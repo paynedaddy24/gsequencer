@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/audio/recall/ags_copy_channel_run.h>
@@ -167,8 +168,8 @@ void
 ags_copy_channel_run_init(AgsCopyChannelRun *copy_channel_run)
 {
   AGS_RECALL(copy_channel_run)->name = "ags-copy\0";
-  AGS_RECALL(copy_channel_run)->version = AGS_RECALL_DEFAULT_VERSION;
-  AGS_RECALL(copy_channel_run)->build_id = AGS_RECALL_DEFAULT_BUILD_ID;
+  AGS_RECALL(copy_channel_run)->version = AGS_EFFECTS_DEFAULT_VERSION;
+  AGS_RECALL(copy_channel_run)->build_id = AGS_BUILD_ID;
   AGS_RECALL(copy_channel_run)->xml_type = "ags-copy-channel-run\0";
   AGS_RECALL(copy_channel_run)->port = NULL;
 

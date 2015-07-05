@@ -1,26 +1,28 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2014 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/thread/ags_autosave_thread.h>
 
-#include <ags/object/ags_application_context.h>
-#include <ags/object/ags_connectable.h>
+#include <ags-lib/object/ags_connectable.h>
 #include <ags/object/ags_main_loop.h>
+
+#include <ags/audio/ags_devout.h>
 
 #include <sys/types.h>
 #include <pwd.h>
@@ -60,7 +62,7 @@ void ags_autosave_thread_run(AgsThread *thread);
 
 enum{
   PROP_0,
-  PROP_APPLICATION_CONTEXT,
+  PROP_AGS_MAIN,
 };
 
 static gpointer ags_autosave_thread_parent_class = NULL;
@@ -131,13 +133,13 @@ ags_autosave_thread_class_init(AgsAutosaveThreadClass *autosave_thread)
   gobject->finalize = ags_autosave_thread_finalize;
 
   /* properties */
-  param_spec = g_param_spec_object("application-context\0",
-				   "application context to check against\0",
-				   "The application context to check against serialization.\0",
-				   AGS_TYPE_APPLICATION_CONTEXT,
+  param_spec = g_param_spec_object("ags_main\0",
+				   "ags_main to check against\0",
+				   "The ags_main to check against serialization.\0",
+				   AGS_TYPE_MAIN,
 				   G_PARAM_READABLE | G_PARAM_WRITABLE);
   g_object_class_install_property(gobject,
-				  PROP_APPLICATION_CONTEXT,
+				  PROP_AGS_MAIN,
 				  param_spec);
 
   /* AgsThread */
@@ -181,7 +183,7 @@ ags_autosave_thread_init(AgsAutosaveThread *autosave_thread)
   g_atomic_int_set(&(autosave_thread->tic), 0);
   g_atomic_int_set(&(autosave_thread->last_sync), 0);
 
-  autosave_thread->application_context = NULL;
+  autosave_thread->ags_main = NULL;
   autosave_thread->counter = 0;
 }
 
@@ -196,25 +198,25 @@ ags_autosave_thread_set_property(GObject *gobject,
   autosave_thread = AGS_AUTOSAVE_THREAD(gobject);
 
   switch(prop_id){
-  case PROP_APPLICATION_CONTEXT:
+  case PROP_AGS_MAIN:
     {
-      AgsApplicationContext *application_context;
+      AgsMain *ags_main;
 
-      application_context = g_value_get_object(value);
+      ags_main = g_value_get_object(value);
 
-      if(autosave_thread->application_context == application_context){
+      if(autosave_thread->ags_main == ags_main){
 	return;
       }
 
-      if(autosave_thread->application_context != NULL){
-	g_object_unref(autosave_thread->application_context);
+      if(autosave_thread->ags_main != NULL){
+	g_object_unref(autosave_thread->ags_main);
       }
 
-      if(application_context != NULL){
-	g_object_ref(application_context);
+      if(ags_main != NULL){
+	g_object_ref(ags_main);
       }
 
-      autosave_thread->application_context = application_context;
+      autosave_thread->ags_main = ags_main;
     }
     break;
   default:
@@ -234,9 +236,9 @@ ags_autosave_thread_get_property(GObject *gobject,
   autosave_thread = AGS_AUTOSAVE_THREAD(gobject);
 
   switch(prop_id){
-  case PROP_APPLICATION_CONTEXT:
+  case PROP_AGS_MAIN:
     {
-      g_value_set_object(value, autosave_thread->application_context);
+      g_value_set_object(value, autosave_thread->ags_main);
     }
     break;
   default:
@@ -337,7 +339,7 @@ ags_autosave_thread_run(AgsThread *thread)
 			       AGS_AUTOSAVE_THREAD_DEFAULT_FILENAME);
     
     file = (AgsFile *) g_object_new(AGS_TYPE_FILE,
-				    "application-context\0", autosave_thread->application_context,
+				    "main\0", autosave_thread->ags_main,
 				    "filename\0", filename,
 				    NULL);
     ags_file_write_concurrent(file);
@@ -349,7 +351,8 @@ ags_autosave_thread_run(AgsThread *thread)
 
 /**
  * ags_autosave_thread_new:
- * @application_context: the #AgsApplicationContext
+ * @devout: the #AgsDevout
+ * @ags_main: the #AgsMain
  *
  * Create a new #AgsAutosaveThread.
  *
@@ -358,12 +361,13 @@ ags_autosave_thread_run(AgsThread *thread)
  * Since: 0.4
  */
 AgsAutosaveThread*
-ags_autosave_thread_new(GObject *application_context)
+ags_autosave_thread_new(GObject *devout, AgsMain *ags_main)
 {
   AgsAutosaveThread *autosave_thread;
 
   autosave_thread = (AgsAutosaveThread *) g_object_new(AGS_TYPE_AUTOSAVE_THREAD,
-						       "application-context\0", application_context,
+						       "devout\0", devout,
+						       "ags-main\0", ags_main,
 						       NULL);
 
   return(autosave_thread);

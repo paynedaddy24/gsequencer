@@ -1,25 +1,28 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/X/ags_machine_callbacks.h>
 
-#include <ags/object/ags_application_context.h>
-#include <ags/object/ags_connectable.h>
+#include <ags/main.h>
+
+#include <ags-lib/object/ags_connectable.h>
+
 #include <ags/object/ags_applicable.h>
 
 #ifdef AGS_USE_LINUX_THREADS
@@ -29,21 +32,25 @@
 #endif 
 #include <ags/thread/ags_task_thread.h>
 
-#include <ags/audio/ags_playback_domain.h>
-#include <ags/audio/ags_playback.h>
+#include <ags/audio/ags_channel.h>
+#include <ags/audio/ags_pattern.h>
+#include <ags/audio/ags_notation.h>
 
-#include <ags/audio/task/ags_start_soundcard.h>
+#include <ags/audio/task/ags_start_devout.h>
 #include <ags/audio/task/ags_remove_audio.h>
 
 #include <ags/X/ags_window.h>
+#include <ags/X/ags_editor.h>
 #include <ags/X/ags_machine_editor.h>
 
+#include <ags/X/editor/ags_machine_radio_button.h>
 #include <ags/X/editor/ags_file_selection.h>
 
-#define AGS_RENAME_ENTRY "AgsRenameEntry\0"
-
 int ags_machine_popup_rename_response_callback(GtkWidget *widget, gint response, AgsMachine *machine);
-void ags_machine_start_failure_response(GtkWidget *dialog, AgsMachine *machine);
+int ags_machine_popup_properties_destroy_callback(GtkWidget *widget, AgsMachine *machine);
+void ags_machine_start_complete_response(GtkWidget *dialog, gint response, AgsMachine *machine);
+
+#define AGS_RENAME_ENTRY "AgsRenameEntry"
 
 int
 ags_machine_button_press_callback(GtkWidget *handle_box, GdkEventButton *event, AgsMachine *machine)
@@ -124,28 +131,49 @@ void
 ags_machine_popup_destroy_activate_callback(GtkWidget *widget, AgsMachine *machine)
 {
   AgsWindow *window;
-  
   AgsRemoveAudio *remove_audio;
-  
-  AgsThread *main_loop, *current;
-  AgsTaskThread *task_thread;
-
-  AgsApplicationContext *application_context;
+  GList *list, *list_start;
   
   window = (AgsWindow *) gtk_widget_get_toplevel((GtkWidget *) machine);
 
-  application_context = window->application_context;
-  
-  main_loop = application_context->main_loop;
-  task_thread = ags_thread_find_type(main_loop,
-				     AGS_TYPE_TASK_THREAD);
-
-  remove_audio = ags_remove_audio_new(window->soundcard,
+  remove_audio = ags_remove_audio_new(window->devout,
 				      machine->audio);
-  ags_task_thread_append_task(task_thread,
+  ags_task_thread_append_task(AGS_TASK_THREAD(AGS_AUDIO_LOOP(AGS_MAIN(window->ags_main)->main_loop)->task_thread),
 			      AGS_TASK(remove_audio));
 
   ags_connectable_disconnect(AGS_CONNECTABLE(machine));
+
+  /* destroy editor */
+  list = window->editor->editor_child;
+
+  while(list != NULL){
+    if(AGS_EDITOR_CHILD(list->data)->machine == machine){
+      gtk_widget_destroy(AGS_EDITOR_CHILD(list->data)->notebook);
+      gtk_widget_destroy(AGS_EDITOR_CHILD(list->data)->meter);
+      gtk_widget_destroy(AGS_EDITOR_CHILD(list->data)->edit_widget);
+      break;
+    }
+
+    list = list->next;
+  }
+  
+  list =
+    list_start = gtk_container_get_children(window->editor->machine_selector);
+
+  list = list->next;
+
+  while(list != NULL){
+    if(AGS_IS_MACHINE_RADIO_BUTTON(list->data) && AGS_MACHINE_RADIO_BUTTON(list->data)->machine == machine){
+      gtk_widget_destroy(list->data);
+      break;
+    }
+    
+    list = list->next;
+  }
+
+  g_list_free(list_start);
+
+  /* destroy machine */
   gtk_widget_destroy((GtkWidget *) machine);
 }
 
@@ -155,14 +183,15 @@ ags_machine_popup_rename_activate_callback(GtkWidget *widget, AgsMachine *machin
   GtkDialog *dialog;
   GtkEntry *entry;
 
-  dialog = (GtkDialog *) gtk_dialog_new_with_buttons(g_strdup("rename\0"),
-						     (GtkWindow *) gtk_widget_get_toplevel(GTK_WIDGET(machine)),
-						     GTK_DIALOG_DESTROY_WITH_PARENT,
-						     GTK_STOCK_OK,
-						     GTK_RESPONSE_ACCEPT,
-						     GTK_STOCK_CANCEL,
-						     GTK_RESPONSE_REJECT,
-						     NULL);
+  machine->rename =
+    dialog = (GtkDialog *) gtk_dialog_new_with_buttons(g_strdup("rename\0"),
+						       (GtkWindow *) gtk_widget_get_toplevel(GTK_WIDGET(machine)),
+						       GTK_DIALOG_DESTROY_WITH_PARENT,
+						       GTK_STOCK_OK,
+						       GTK_RESPONSE_ACCEPT,
+						       GTK_STOCK_CANCEL,
+						       GTK_RESPONSE_REJECT,
+						       NULL);
 
   entry = (GtkEntry *) gtk_entry_new();
   gtk_entry_set_text(entry, machine->name);
@@ -191,7 +220,8 @@ ags_machine_popup_rename_response_callback(GtkWidget *widget, gint response, Ags
     gtk_frame_set_label((GtkFrame *) gtk_container_get_children((GtkContainer *) machine)->data, g_strconcat(G_OBJECT_TYPE_NAME(machine), ": \0", text, NULL));
     g_free(text);
   }
-
+  
+  machine->rename = NULL;
   gtk_widget_destroy(widget);
 
   return(0);
@@ -201,10 +231,133 @@ int
 ags_machine_popup_properties_activate_callback(GtkWidget *widget, AgsMachine *machine)
 {
   machine->properties = (GtkDialog *) ags_machine_editor_new(machine);
+  g_signal_connect_after(machine->properties, "destroy\0",
+			 G_CALLBACK(ags_machine_popup_properties_destroy_callback), machine);
   gtk_window_set_default_size((GtkWindow *) machine->properties, -1, 400);
   ags_connectable_connect(AGS_CONNECTABLE(machine->properties));
   ags_applicable_reset(AGS_APPLICABLE(machine->properties));
   gtk_widget_show_all((GtkWidget *) machine->properties);
+
+  return(0);
+}
+
+int
+ags_machine_popup_properties_destroy_callback(GtkWidget *widget, AgsMachine *machine)
+{
+  machine->properties = NULL;
+}
+
+int
+ags_machine_popup_copy_pattern_callback(GtkWidget *widget, AgsMachine *machine)
+{
+  AgsChannel *channel;
+  
+  xmlDoc *clipboard;
+  xmlNode *audio_node, *notation_node;
+
+  xmlChar *buffer;
+  int size;
+  gint i;
+
+  auto xmlNode* ags_machine_popup_copy_pattern_callback_to_notation(AgsChannel *current);
+
+  xmlNode* ags_machine_popup_copy_pattern_callback_to_notation(AgsChannel *current){
+    AgsPattern *pattern;
+    xmlNode *notation_node, *current_note;
+    guint x_boundary, y_boundary;
+    guint bank_0, bank_1, k;
+    
+    /* create root node */
+    notation_node = xmlNewNode(NULL, BAD_CAST "notation\0");
+
+    xmlNewProp(notation_node, BAD_CAST "program\0", BAD_CAST "ags\0");
+    xmlNewProp(notation_node, BAD_CAST "type\0", BAD_CAST AGS_NOTATION_CLIPBOARD_TYPE);
+    xmlNewProp(notation_node, BAD_CAST "version\0", BAD_CAST AGS_NOTATION_CLIPBOARD_VERSION);
+    xmlNewProp(notation_node, BAD_CAST "format\0", BAD_CAST AGS_NOTATION_CLIPBOARD_FORMAT);
+    xmlNewProp(notation_node, BAD_CAST "base_frequency\0", BAD_CAST g_strdup("0\0"));
+    xmlNewProp(notation_node, BAD_CAST "audio-channel\0", BAD_CAST g_strdup_printf("%u\0", current->audio_channel));
+
+    bank_0 = machine->bank_0;
+    bank_1 = machine->bank_1;
+    
+    x_boundary = G_MAXUINT;
+    y_boundary = G_MAXUINT;
+
+    while(current != NULL){
+      pattern = current->pattern->data;
+
+      for(k = 0; k < pattern->dim[2]; k++){
+	if(ags_pattern_get_bit(pattern, bank_0, bank_1, k)){
+	  current_note = xmlNewChild(notation_node, NULL, BAD_CAST "note\0", NULL);
+	  
+	  xmlNewProp(current_note, BAD_CAST "x\0", BAD_CAST g_strdup_printf("%u\0", k));
+	  xmlNewProp(current_note, BAD_CAST "x1\0", BAD_CAST g_strdup_printf("%u\0", k + 1));
+
+	  if((AGS_MACHINE_REVERSE_NOTATION & (machine->flags)) != 0){
+	    xmlNewProp(current_note, BAD_CAST "y\0", BAD_CAST g_strdup_printf("%u\0", machine->audio->input_pads - current->pad - 1));
+	  }else{
+	    xmlNewProp(current_note, BAD_CAST "y\0", BAD_CAST g_strdup_printf("%u\0", current->pad));
+	  }
+	  
+	  if(x_boundary > k){
+	    x_boundary = k;
+	  }
+      
+	  if((AGS_MACHINE_REVERSE_NOTATION & (machine->flags)) != 0){
+	    guint tmp;
+
+	    tmp = machine->audio->input_pads - current->pad - 1;
+	    
+	    if(y_boundary > tmp){
+	      y_boundary = tmp;
+	    }
+	  }else{
+	    if(y_boundary > current->pad){
+	      y_boundary = current->pad;
+	    }
+	  }
+	}
+      }
+      
+      current = current->next;
+    }
+
+    xmlNewProp(notation_node, BAD_CAST "x_boundary\0", BAD_CAST g_strdup_printf("%u\0", x_boundary));
+    xmlNewProp(notation_node, BAD_CAST "y_boundary\0", BAD_CAST g_strdup_printf("%u\0", y_boundary));
+
+    return(notation_node);
+  }
+  
+  /* create document */
+  clipboard = xmlNewDoc(BAD_CAST XML_DEFAULT_VERSION);
+
+  /* create root node */
+  audio_node = xmlNewNode(NULL, BAD_CAST "audio\0");
+  xmlDocSetRootElement(clipboard, audio_node);
+  
+  channel = machine->audio->input;
+  
+  for(i = 0; i < machine->audio->audio_channels; i++){
+    notation_node = ags_machine_popup_copy_pattern_callback_to_notation(channel);
+    xmlAddChild(audio_node, notation_node);
+
+    channel = channel->next;
+  }
+  
+  /* write to clipboard */
+  xmlDocDumpFormatMemoryEnc(clipboard, &buffer, &size, "UTF-8\0", TRUE);
+  gtk_clipboard_set_text(gtk_clipboard_get(GDK_SELECTION_CLIPBOARD),
+			 buffer, size);
+  gtk_clipboard_store(gtk_clipboard_get(GDK_SELECTION_CLIPBOARD));
+  
+  xmlFreeDoc(clipboard);
+
+  return(0);
+}
+
+int
+ags_machine_popup_paste_pattern_callback(GtkWidget *widget, AgsMachine *machine)
+{
 
   return(0);
 }
@@ -386,8 +539,9 @@ ags_machine_play_callback(GtkWidget *toggle_button, AgsMachine *machine)
 
     machine->flags |= AGS_MACHINE_BLOCK_PLAY;
 
-    ags_machine_set_run(machine,
-			TRUE);
+    ags_machine_set_run_extended(machine,
+				 TRUE,
+				 TRUE, FALSE);
 
     machine->flags &= (~AGS_MACHINE_BLOCK_PLAY);
   }else{
@@ -397,12 +551,13 @@ ags_machine_play_callback(GtkWidget *toggle_button, AgsMachine *machine)
 
     printf("machine: off\n\0");
 
-    machine->flags |= AGS_MACHINE_BLOCK_STOP;
+    //    machine->flags |= AGS_MACHINE_BLOCK_STOP;
 
-    ags_machine_set_run(machine,
-			FALSE);
+    ags_machine_set_run_extended(machine,
+				 FALSE,
+				 TRUE, FALSE);
 
-    machine->flags &= (~AGS_MACHINE_BLOCK_STOP);
+    //    machine->flags &= (~AGS_MACHINE_BLOCK_STOP);
   }
 }
 
@@ -427,8 +582,10 @@ ags_machine_done_callback(AgsAudio *audio,
 
   machine->flags |= AGS_MACHINE_BLOCK_STOP;
 
-  gtk_toggle_button_set_active(machine->play, FALSE);
-
+  if((AGS_RECALL_ID_SEQUENCER & (recall_id->flags)) != 0){
+    gtk_toggle_button_set_active(machine->play, FALSE);
+  }
+  
   /* cancel playback */
   channel = audio->output;
   
@@ -449,8 +606,6 @@ ags_machine_done_callback(AgsAudio *audio,
     }
     
     /* set remove flag */
-    AGS_PLAYBACK(channel->playback)->flags |= (AGS_PLAYBACK_DONE | AGS_PLAYBACK_REMOVE);
-    
     channel = channel->next;
   }
 
@@ -458,29 +613,36 @@ ags_machine_done_callback(AgsAudio *audio,
 }
 
 void
-ags_machine_start_failure_callback(AgsTask *task, GError *error,
-				   AgsMachine *machine)
+ags_machine_start_complete_callback(AgsTaskCompletion *task_completion,
+				    AgsMachine *machine)
 {
   AgsWindow *window;
   GtkMessageDialog *dialog;
-
-  /* show error message */
-  window = gtk_widget_get_ancestor(machine,
-				   AGS_TYPE_MACHINE);
   
-  dialog = (GtkMessageDialog *) gtk_message_dialog_new(GTK_WINDOW(window),
-						       GTK_DIALOG_DESTROY_WITH_PARENT,
-						       GTK_MESSAGE_ERROR,
-						       GTK_BUTTONS_CLOSE,
-						       error->message);
-  g_signal_connect(dialog, "response\0",
-		   G_CALLBACK(ags_machine_start_failure_response), machine);
-  gtk_widget_show_all(dialog);
+  AgsDevoutThread *devout_thread;
+  AgsTask *task;
+
+  task = (AgsTask *) task_completion->task;
+  window = AGS_MAIN(AGS_START_DEVOUT(task)->devout->ags_main)->window;
+  devout_thread = (AgsDevoutThread *) AGS_AUDIO_LOOP(AGS_MAIN(window->ags_main)->main_loop)->devout_thread;
+
+  if(devout_thread->error != NULL){
+    /* show error message */
+    dialog = (GtkMessageDialog *) gtk_message_dialog_new(GTK_WINDOW(window),
+							 GTK_DIALOG_DESTROY_WITH_PARENT,
+							 GTK_MESSAGE_ERROR,
+							 GTK_BUTTONS_CLOSE,
+							 "Error: %s\0", devout_thread->error->message);
+    g_signal_connect(dialog, "response\0",
+		     G_CALLBACK(ags_machine_start_complete_response), machine);
+    gtk_widget_show_all((GtkWidget *) dialog);
+  }
 }
 
 void
-ags_machine_start_failure_response(GtkWidget *dialog,
-				   AgsMachine *machine)
+ags_machine_start_complete_response(GtkWidget *dialog,
+				    gint response,
+				    AgsMachine *machine)
 {
   gtk_widget_destroy(dialog);
 }

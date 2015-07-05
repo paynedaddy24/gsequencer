@@ -166,8 +166,8 @@ void
 ags_buffer_channel_run_init(AgsBufferChannelRun *buffer_channel_run)
 {
   AGS_RECALL(buffer_channel_run)->name = "ags-buffer\0";
-  AGS_RECALL(buffer_channel_run)->version = AGS_RECALL_DEFAULT_VERSION;
-  AGS_RECALL(buffer_channel_run)->build_id = AGS_RECALL_DEFAULT_BUILD_ID;
+  AGS_RECALL(buffer_channel_run)->version = AGS_EFFECTS_DEFAULT_VERSION;
+  AGS_RECALL(buffer_channel_run)->build_id = AGS_BUILD_ID;
   AGS_RECALL(buffer_channel_run)->xml_type = "ags-buffer-channel-run\0";
   AGS_RECALL(buffer_channel_run)->port = NULL;
 
@@ -187,6 +187,10 @@ ags_buffer_channel_run_finalize(GObject *gobject)
 void
 ags_buffer_channel_run_connect(AgsConnectable *connectable)
 {
+  if((AGS_RECALL_CONNECTED & (AGS_RECALL(connectable)->flags)) != 0){
+    return;
+  }
+
   /* call parent */
   ags_buffer_channel_run_parent_connectable_interface->connect(connectable);
 
@@ -205,6 +209,10 @@ ags_buffer_channel_run_disconnect(AgsConnectable *connectable)
 void
 ags_buffer_channel_run_connect_dynamic(AgsDynamicConnectable *dynamic_connectable)
 {
+  if((AGS_RECALL_DYNAMIC_CONNECTED & (AGS_RECALL(dynamic_connectable)->flags)) != 0){
+    return;
+  }
+
   /* call parent */
   ags_buffer_channel_run_parent_dynamic_connectable_interface->connect_dynamic(dynamic_connectable);
 
@@ -229,7 +237,8 @@ ags_buffer_channel_run_duplicate(AgsRecall *recall,
 {
   AgsBufferChannelRun *buffer_channel_run, *copy;
 
-  buffer_channel_run = (AgsBufferChannelRun *) recall;  
+  buffer_channel_run = (AgsBufferChannelRun *) recall;
+
   copy = (AgsBufferChannelRun *) AGS_RECALL_CLASS(ags_buffer_channel_run_parent_class)->duplicate(recall,
 												  recall_id,
 												  n_params, parameter);

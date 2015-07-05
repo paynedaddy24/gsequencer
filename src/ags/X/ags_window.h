@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef __AGS_WINDOW_H__
@@ -23,9 +24,7 @@
 #include <glib-object.h>
 #include <gtk/gtk.h>
 
-#include <ags/object/ags_soundcard.h>
-
-#include <ags/X/ags_automation_window.h>
+#include <ags/audio/ags_devout.h>
 
 #include <ags/X/ags_menu_bar.h>
 #include <ags/X/ags_machine.h>
@@ -60,12 +59,11 @@ struct _AgsWindow
 
   guint flags;
 
-  char *name;
+  GObject *ags_main;
 
-  GObject *application_context;
-  pthread_mutex_t *application_mutex;
-  
-  GObject *soundcard;
+  AgsDevout *devout;
+
+  char *name;
 
   AgsMenuBar *menu_bar;
 
@@ -77,8 +75,6 @@ struct _AgsWindow
 
   AgsEditor *editor;
   AgsNavigation *navigation;
-
-  AgsAutomationWindow *automation_window;
 
   AgsExportWindow *export_window;
   GtkWidget *import_window;
@@ -113,6 +109,6 @@ void ags_window_decrement_machine_counter(AgsWindow *window,
 AgsMachineCounter* ags_machine_counter_alloc(gchar *version, gchar *build_id,
 					     GType machine_type, guint initial_value);
 
-AgsWindow* ags_window_new(GObject *application_context);
+AgsWindow* ags_window_new(GObject *ags_main);
 
 #endif /*__AGS_WINDOW_H__*/

@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef __AGS_CHANNEL_H__
@@ -62,7 +63,7 @@ struct _AgsChannel
   guint flags;
 
   GObject *audio;
-  GObject *soundcard;
+  GObject *devout;
 
   AgsChannel *prev;
   AgsChannel *prev_pad;
@@ -99,12 +100,6 @@ struct _AgsChannelClass
 {
   GObjectClass object;
 
-  GList* (*add_effect)(AgsChannel *channel,
-		       gchar *filename,
-		       gchar *effect);
-  void (*remove_effect)(AgsChannel *channel,
-			guint nth);
-  
   void (*recycling_changed)(AgsChannel *channel,
 			    AgsRecycling *old_start_region, AgsRecycling *old_end_region,
 			    AgsRecycling *new_start_region, AgsRecycling *new_end_region,
@@ -130,7 +125,7 @@ AgsChannel* ags_channel_pad_nth(AgsChannel *channel, guint nth);
 AgsChannel* ags_channel_first_with_recycling(AgsChannel *channel);
 AgsChannel* ags_channel_last_with_recycling(AgsChannel *channel);
 
-void ags_channel_set_soundcard(AgsChannel *channel, GObject *soundcard);
+void ags_channel_set_devout(AgsChannel *channel, GObject *devout);
 
 void ags_channel_remove_recall_id(AgsChannel *channel, AgsRecallID *recall_id);
 void ags_channel_add_recall_id(AgsChannel *channel, AgsRecallID *recall_id);
@@ -140,16 +135,6 @@ void ags_channel_remove_recall_container(AgsChannel *channel, GObject *recall_co
 
 void ags_channel_remove_recall(AgsChannel *channel, GObject *recall, gboolean play);
 void ags_channel_add_recall(AgsChannel *channel, GObject *recall, gboolean play);
-
-void ags_channel_remove_pattern(AgsChannel *channel, GObject *pattern);
-void ags_channel_add_pattern(AgsChannel *channel, GObject *pattern);
-
-GList* ags_channel_get_recall_by_effect(AgsChannel *channel, gchar *filename, gchar *effect);
-GList* ags_channel_add_effect(AgsChannel *channel,
-			      char *filename,
-			      gchar *effect);
-void ags_channel_remove_effect(AgsChannel *channel,
-			       guint nth);
 
 void ags_channel_set_link(AgsChannel *channel, AgsChannel *link,
 			  GError **error);

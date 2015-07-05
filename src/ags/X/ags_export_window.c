@@ -1,31 +1,30 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2014 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/X/ags_export_window.h>
 #include <ags/X/ags_export_window_callbacks.h>
 
-#include <ags/object/ags_connectable.h>
-#include <ags/object/ags_soundcard.h>
+#include <ags-lib/object/ags_connectable.h>
+
+#include <ags/main.h>
 
 #include <ags/audio/ags_notation.h>
-
-#include <ags/X/ags_window.h>
-#include <ags/X/ags_navigation.h>
 
 #include <stdlib.h>
 
@@ -59,7 +58,8 @@ gboolean ags_export_window_delete_event(GtkWidget *widget, GdkEventAny *event);
 
 enum{
   PROP_0,
-  PROP_SOUNDCARD,
+  PROP_DEVOUT,
+  PROP_MAIN,
 };
 
 static gpointer ags_export_window_parent_class = NULL;
@@ -119,20 +119,37 @@ ags_export_window_class_init(AgsExportWindowClass *export_window)
 
   /* properties */
   /**
-   * AgsExportWindow:soundcard:
+   * AgsExportWindow:devout:
    *
-   * The assigned #AgsSoundcard acting as default sink.
+   * The assigned #AgsDevout acting as default sink.
    * 
    * Since: 0.4
    */
-  param_spec = g_param_spec_object("soundcard\0",
-				   "assigned soundcard\0",
-				   "The soundcard it is assigned with\0",
+  param_spec = g_param_spec_object("devout\0",
+				   "assigned devout\0",
+				   "The devout it is assigned with\0",
 				   G_TYPE_OBJECT,
 				   G_PARAM_READABLE | G_PARAM_WRITABLE);
   g_object_class_install_property(gobject,
-				  PROP_SOUNDCARD,
+				  PROP_DEVOUT,
 				  param_spec);
+
+  /**
+   * AgsExportWindow:ags-main:
+   *
+   * The assigned #AgsMain to give control of application.
+   * 
+   * Since: 0.4
+   */
+  param_spec = g_param_spec_object("ags-main\0",
+				   "assigned ags main\0",
+				   "The AgsMain it is assigned with\0",
+				   G_TYPE_OBJECT,
+				   G_PARAM_READABLE | G_PARAM_WRITABLE);
+  g_object_class_install_property(gobject,
+				  PROP_MAIN,
+				  param_spec);
+
 
   /* GtkWidgetClass */
   widget = (GtkWidgetClass *) export_window;
@@ -157,14 +174,9 @@ ags_export_window_init(AgsExportWindow *export_window)
   GtkHBox *hbox;
   GtkTable *table;
   GtkLabel *label;
-  gchar *str;
-  gdouble bpm;
 
   export_window->flags = 0;
 
-  export_window->parent = NULL;
-  export_window->soundcard = NULL;
-  
   g_object_set(export_window,
 	       "title\0", "export to audio data\0",
 	       NULL);
@@ -174,11 +186,19 @@ ags_export_window_init(AgsExportWindow *export_window)
   gtk_container_add(GTK_CONTAINER(export_window),
 		    GTK_WIDGET(vbox));
 
-  export_window->live_export = gtk_check_button_new_with_label("live export\0");
-  gtk_toggle_button_set_active(export_window->live_export,
+  export_window->live_export = (GtkCheckButton *) gtk_check_button_new_with_label("live export\0");
+  gtk_toggle_button_set_active((GtkToggleButton *) export_window->live_export,
 			       TRUE);
   gtk_box_pack_start(GTK_BOX(vbox),
 		     GTK_WIDGET(export_window->live_export),
+		     FALSE, FALSE,
+		     0);
+
+  export_window->exclude_sequencer = (GtkCheckButton *) gtk_check_button_new_with_label("exclude sequencers\0");
+  gtk_toggle_button_set_active((GtkToggleButton *) export_window->exclude_sequencer,
+			       TRUE);
+  gtk_box_pack_start(GTK_BOX(vbox),
+		     GTK_WIDGET(export_window->exclude_sequencer),
 		     FALSE, FALSE,
 		     0);
 
@@ -210,7 +230,7 @@ ags_export_window_init(AgsExportWindow *export_window)
 		   GTK_FILL, GTK_FILL,
 		   0, 0);
 
-  export_window->filename = gtk_entry_new();
+  export_window->filename = (GtkEntry *) gtk_entry_new();
   gtk_entry_set_text(export_window->filename,
 		     "out.wav\0");
   gtk_box_pack_start(GTK_BOX(hbox),
@@ -218,7 +238,7 @@ ags_export_window_init(AgsExportWindow *export_window)
 		     TRUE, TRUE,
 		     0);
 
-  export_window->file_chooser_button = gtk_button_new_with_label("open\0");
+  export_window->file_chooser_button = (GtkButton *) gtk_button_new_with_label("open\0");
   gtk_box_pack_start(GTK_BOX(hbox),
 		     GTK_WIDGET(export_window->file_chooser_button),
 		     TRUE, TRUE,
@@ -242,7 +262,7 @@ ags_export_window_init(AgsExportWindow *export_window)
   //TODO:JK: uncomment me
   //  gtk_combo_box_text_append_text(export_window->mode,
   //				 "time\0");
-  gtk_combo_box_set_active(export_window->mode,
+  gtk_combo_box_set_active((GtkComboBox *) export_window->mode,
 			   0);
   gtk_table_attach(table,
 		   GTK_WIDGET(export_window->mode),
@@ -263,7 +283,7 @@ ags_export_window_init(AgsExportWindow *export_window)
 		   GTK_FILL|GTK_EXPAND, GTK_FILL|GTK_EXPAND,
 		   0, 0);
 
-  export_window->tact = gtk_spin_button_new_with_range(0.0, AGS_NOTATION_DEFAULT_LENGTH, 0.25);
+  export_window->tact = (GtkSpinButton *) gtk_spin_button_new_with_range(0.0, AGS_NOTATION_DEFAULT_LENGTH, 0.25);
   gtk_spin_button_set_digits(export_window->tact,
 			     2);
   gtk_table_attach(table,
@@ -293,10 +313,9 @@ ags_export_window_init(AgsExportWindow *export_window)
 		   GTK_FILL|GTK_EXPAND, GTK_FILL|GTK_EXPAND,
 		   0, 0);
 
-  bpm = AGS_SOUNDCARD_DEFAULT_BPM; // AGS_NAVIGATION(AGS_WINDOW(AGS_APPLICATION_CONTEXT(export_window->application_context)->window)->navigation)->bpm->adjustment->value
-  str = ags_navigation_tact_to_time_string(0.0,
-					   bpm);
-  export_window->duration = gtk_label_new(str);
+  export_window->duration = (GtkLabel *) gtk_label_new(ags_navigation_tact_to_time_string(0.0,
+											  AGS_DEVOUT_DEFAULT_BPM,
+											  1.0));
   gtk_box_pack_start(GTK_BOX(hbox),
 		     GTK_WIDGET(export_window->duration),
 		     FALSE, FALSE,
@@ -317,7 +336,7 @@ ags_export_window_init(AgsExportWindow *export_window)
   export_window->output_format = (GtkComboBoxText *) gtk_combo_box_text_new();
   gtk_combo_box_text_append_text(export_window->output_format,
 				 "WAV\0");
-  gtk_combo_box_set_active(export_window->output_format,
+  gtk_combo_box_set_active((GtkComboBox *) export_window->output_format,
 			   0);
   gtk_table_attach(table,
 		   GTK_WIDGET(export_window->output_format),
@@ -352,19 +371,39 @@ ags_export_window_set_property(GObject *gobject,
   export_window = AGS_EXPORT_WINDOW(gobject);
 
   switch(prop_id){
-  case PROP_SOUNDCARD:
+  case PROP_DEVOUT:
     {
-      GObject *soundcard;
+      AgsDevout *devout;
 
-      soundcard = g_value_get_object(value);
+      devout = g_value_get_object(value);
 
-      if(export_window->soundcard == soundcard)
+      if(export_window->devout == devout)
 	return;
 
-      if(soundcard != NULL)
-	g_object_ref(soundcard);
+      if(devout != NULL)
+	g_object_ref(devout);
 
-      export_window->soundcard = soundcard;
+      export_window->devout = devout;
+    }
+    break;
+  case PROP_MAIN:
+    {
+      AgsMain *ags_main;
+
+      ags_main = (AgsMain *) g_value_get_object(value);
+
+      if((AgsMain *) export_window->ags_main == ags_main)
+	return;
+
+      if(export_window->ags_main != NULL){
+	g_object_unref(export_window->ags_main);
+      }
+
+      if(ags_main != NULL){
+	g_object_ref(ags_main);
+      }
+
+      export_window->ags_main = (GObject *) ags_main;
     }
     break;
   default:
@@ -384,8 +423,11 @@ ags_export_window_get_property(GObject *gobject,
   export_window = AGS_EXPORT_WINDOW(gobject);
 
   switch(prop_id){
-  case PROP_SOUNDCARD:
-    g_value_set_object(value, export_window->soundcard);
+  case PROP_DEVOUT:
+    g_value_set_object(value, export_window->devout);
+    break;
+  case PROP_MAIN:
+    g_value_set_object(value, export_window->ags_main);
     break;
   default:
     G_OBJECT_WARN_INVALID_PROPERTY_ID(gobject, prop_id, param_spec);
@@ -452,8 +494,7 @@ ags_export_window_new()
 {
   AgsExportWindow *export_window;
 
-  export_window = (AgsExportWindow *) g_object_new(AGS_TYPE_EXPORT_WINDOW,
-						   NULL);
+  export_window = (AgsExportWindow *) g_object_new(AGS_TYPE_EXPORT_WINDOW, NULL);
 
   return(export_window);
 }

@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2014 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/X/ags_ladspa_browser_callbacks.h>
@@ -41,6 +42,7 @@ ags_ladspa_browser_plugin_filename_callback(GtkComboBoxText *combo_box,
 
   AgsLadspaPlugin *ladspa_plugin;
   GList *list;
+  gchar *path;
 
   void *plugin_so;
   LADSPA_Descriptor_Function ladspa_descriptor;
@@ -48,10 +50,10 @@ ags_ladspa_browser_plugin_filename_callback(GtkComboBoxText *combo_box,
 
   list = gtk_container_get_children(GTK_CONTAINER(ladspa_browser->plugin));
 
-  filename = GTK_COMBO_BOX(list->next->data);
-  effect = GTK_COMBO_BOX(list->next->next->next->data);
+  filename = GTK_COMBO_BOX_TEXT(list->next->data);
+  effect = GTK_COMBO_BOX_TEXT(list->next->next->next->data);
 
-  ags_combo_box_text_remove_all(effect);
+  gtk_list_store_clear(GTK_LIST_STORE(gtk_combo_box_get_model(effect)));
 
   ags_ladspa_manager_load_file(gtk_combo_box_text_get_active_text(filename));
   ladspa_plugin = ags_ladspa_manager_find_ladspa_plugin(gtk_combo_box_text_get_active_text(filename));
@@ -63,18 +65,18 @@ ags_ladspa_browser_plugin_filename_callback(GtkComboBoxText *combo_box,
 							   "ladspa_descriptor\0");
 
     if(dlerror() == NULL && ladspa_descriptor){
-      unsigned long plugin_index;
+      long index;
 
       /* We've successfully found a ladspa_descriptor function. Now load name and uuid member. */
 
       for(plugin_index = 0; (plugin_descriptor = ladspa_descriptor(plugin_index)) != NULL; plugin_index++){
 	gtk_combo_box_text_append_text(effect,
-				       g_strdup_printf("%s:%lu\0", plugin_descriptor->Name, plugin_descriptor->UniqueID));
+				       g_strdup_printf("%s - %s:%lu\0", (LADSPA_IS_HARD_RT_CAPABLE(plugin_descriptor->Properties) ? "\342\230\221": " \342\230\220"), plugin_descriptor->Name, plugin_descriptor->UniqueID));
       }
     }
   }
 
-  gtk_combo_box_set_active(effect,
+  gtk_combo_box_set_active((GtkComboBox *) effect,
   			   0);
 }
 
@@ -102,8 +104,8 @@ ags_ladspa_browser_plugin_effect_callback(GtkComboBoxText *combo_box,
   list_start = 
     list = gtk_container_get_children(GTK_CONTAINER(ladspa_browser->plugin));
 
-  filename = GTK_COMBO_BOX(list->next->data);
-  effect = GTK_COMBO_BOX(list->next->next->next->data);
+  filename = GTK_COMBO_BOX_TEXT(list->next->data);
+  effect = GTK_COMBO_BOX_TEXT(list->next->next->next->data);
 
   g_list_free(list_start);
 
@@ -116,7 +118,7 @@ ags_ladspa_browser_plugin_effect_callback(GtkComboBoxText *combo_box,
   
   plugin_so = ladspa_plugin->plugin_so;
 
-  plugin_index = (unsigned long) gtk_combo_box_get_active(effect);
+  index = gtk_combo_box_get_active((GtkComboBox *) effect);
 
   if(plugin_index != -1 &&
      plugin_so){
@@ -127,7 +129,7 @@ ags_ladspa_browser_plugin_effect_callback(GtkComboBoxText *combo_box,
       plugin_descriptor = ladspa_descriptor(plugin_index);
 
       port_descriptor = plugin_descriptor->PortDescriptors;   
-
+      
       /* update ui - reading plugin file */
       label = GTK_LABEL(list->data);
       gtk_label_set_text(label,
@@ -191,15 +193,22 @@ ags_ladspa_browser_plugin_effect_callback(GtkComboBoxText *combo_box,
 				  0, 1,
 				  y, y + 1);
 
-	gtk_table_attach_defaults(table,
-				  GTK_WIDGET(ags_ladspa_browser_combo_box_controls_new()),
-				  1, 2,
-				  y, y + 1);
+	if(LADSPA_IS_HINT_TOGGLED(plugin_descriptor->PortRangeHints[i].HintDescriptor)){
+	  gtk_table_attach_defaults(table,
+				    GTK_WIDGET(ags_ladspa_browser_combo_box_boolean_controls_new()),
+				    1, 2,
+				    y, y + 1);	  
+	}else{
+	  gtk_table_attach_defaults(table,
+				    GTK_WIDGET(ags_ladspa_browser_combo_box_float_controls_new()),
+				    1, 2,
+				    y, y + 1);
+	}
 
 	y++;
       }
 
-      gtk_widget_show_all(table);
+      gtk_widget_show_all((GtkWidget *) table);
     }
   }else{
     /* update ui - empty */

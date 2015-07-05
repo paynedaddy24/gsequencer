@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef __AGS_AUDIO_FILE_H__
@@ -21,6 +22,13 @@
 
 #include <glib.h>
 #include <glib-object.h>
+
+#ifndef AGS_USE_AO
+#include <ags/audio/ags_devout.h>
+#else
+#include <ags/audio/ags_libao.h>
+#endif
+
 
 #define AGS_TYPE_AUDIO_FILE                (ags_audio_file_get_type())
 #define AGS_AUDIO_FILE(obj)                (G_TYPE_CHECK_INSTANCE_CAST((obj), AGS_TYPE_AUDIO_FILE, AgsAudioFile))
@@ -36,9 +44,9 @@ struct _AgsAudioFile
 {
   GObject object;
 
-  GObject *soundcard;
-  
-  gchar *filename;
+  AgsDevout *devout;
+
+  gchar *name;
   guint samplerate;
   guint frames;
   guint channels;
@@ -71,8 +79,8 @@ void ags_audio_file_write(AgsAudioFile *audio_file,
 			  signed short *buffer, guint buffer_size);
 void ags_audio_file_flush(AgsAudioFile *audio_file);
 
-AgsAudioFile* ags_audio_file_new(gchar *filename,
-				 GObject *soundcard,
+AgsAudioFile* ags_audio_file_new(gchar *name,
+				 AgsDevout *devout,
 				 guint start_channel, guint audio_channels);
 
 #endif /*__AGS_AUDIO_FILE_H__*/

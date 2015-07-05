@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/X/editor/ags_piano.h>
@@ -22,6 +23,9 @@
 #include <ags/object/ags_connectable.h>
 
 #include <ags/X/ags_editor.h>
+
+#include <ags/X/editor/ags_note_edit.h>
+#include <ags/X/editor/ags_pattern_edit.h>
 
 #include <math.h>
 
@@ -117,8 +121,14 @@ ags_piano_connect(AgsConnectable *connectable)
 
   piano = AGS_PIANO(connectable);
 
-  g_signal_connect((GObject *) piano, "expose_event\0",
-  		   G_CALLBACK(ags_piano_expose_event), (gpointer) piano);
+  g_signal_connect((GObject *) meter, "destroy\0",
+		   G_CALLBACK(ags_meter_destroy_callback), (gpointer) meter);
+
+  g_signal_connect_after((GObject *) meter, "show\0",
+			 G_CALLBACK(ags_meter_show_callback), (gpointer) meter);
+
+  g_signal_connect((GObject *) meter, "expose_event\0",
+  		   G_CALLBACK(ags_meter_expose_event), (gpointer) meter);
 
   g_signal_connect((GObject *) piano, "configure_event\0",
   		   G_CALLBACK(ags_piano_configure_event), (gpointer) piano);
@@ -127,7 +137,16 @@ ags_piano_connect(AgsConnectable *connectable)
 void
 ags_piano_disconnect(AgsConnectable *connectable)
 {
-  //TODO:JK: implement me
+}
+
+void
+ags_meter_destroy(GtkObject *object)
+{
+}
+
+void
+ags_meter_show(GtkWidget *widget)
+{
 }
 
 void
@@ -136,10 +155,12 @@ ags_piano_paint(AgsPiano *piano)
   AgsEditor *editor;
   GtkWidget *widget;
   cairo_t *cr;
+  gchar *base_note;
   guint bitmap;
   guint y[2];
   guint i, i_stop, j, j0;
   guint border_top;
+  guint control_height;
 
   widget = (GtkWidget *) piano;
   editor = (AgsEditor *) gtk_widget_get_ancestor(widget, AGS_TYPE_EDITOR);
@@ -148,17 +169,83 @@ ags_piano_paint(AgsPiano *piano)
 
   bitmap = 0x52a52a; // description of the keyboard
 
-  j = (guint) ceil(GTK_RANGE(editor->edit.note_edit->vscrollbar)->adjustment->value / (double) editor->edit.note_edit->control_height);
-  j = j % 12;
+  if(AGS_IS_NOTE_EDIT(editor->current_edit_widget)){
+    control_height = AGS_NOTE_EDIT(editor->current_edit_widget)->control_height;
+    
+    j = (guint) ceil(GTK_RANGE(AGS_NOTE_EDIT(editor->current_edit_widget)->vscrollbar)->adjustment->value / (double) control_height);
 
-  y[0] = (guint) round(GTK_RANGE(editor->edit.note_edit->vscrollbar)->adjustment->value) % editor->edit.note_edit->control_height;
+    y[0] = (guint) round(GTK_RANGE(AGS_NOTE_EDIT(editor->current_edit_widget)->vscrollbar)->adjustment->value) % control_height;
+  }else if(AGS_IS_PATTERN_EDIT(editor->current_edit_widget)){
+    control_height = AGS_PATTERN_EDIT(editor->current_edit_widget)->control_height;
+    
+    j = (guint) ceil(GTK_RANGE(AGS_PATTERN_EDIT(editor->current_edit_widget)->vscrollbar)->adjustment->value / (double) control_height);
 
-  if(y[0] != 0){
-    y[0] = editor->edit.note_edit->control_height - y[0];
+    y[0] = (guint) round(GTK_RANGE(AGS_PATTERN_EDIT(editor->current_edit_widget)->vscrollbar)->adjustment->value) % control_height;
   }
 
-  y[1] = ((guint) (widget->allocation.height - border_top) - y[0]) % editor->edit.note_edit->control_height;
-  i_stop = ((widget->allocation.height - border_top) - y[0] - y[1]) / editor->edit.note_edit->control_height;
+  base_note = AGS_NOTATION(editor->selected_machine->audio->notation->data)->base_note;
+
+  j = j % 12;
+  
+  /* apply base note */
+  if(!g_ascii_strncasecmp(base_note,
+		      "A\0",
+		      2)){
+    j = (11 + j) + (editor->selected_machine->audio->input_pads % 12) * (j * editor->selected_machine->audio->input_pads) + (editor->selected_machine->audio->input_pads * 11) + 4;
+  }else if(!g_ascii_strncasecmp(base_note,
+		      "A#\0",
+		      3)){
+    j = (10 + j) + (editor->selected_machine->audio->input_pads % 12) * (j * editor->selected_machine->audio->input_pads) + (editor->selected_machine->audio->input_pads * 10) + 4;
+  }else if(!g_ascii_strncasecmp(base_note,
+		      "H\0",
+		      2)){
+    j = (9 + j) + (editor->selected_machine->audio->input_pads % 12) * (j * editor->selected_machine->audio->input_pads) + (editor->selected_machine->audio->input_pads * 9) + 4;
+  }else if(!g_ascii_strncasecmp(base_note,
+		      "C\0",
+		      2)){
+    j = (8 + j) + (editor->selected_machine->audio->input_pads % 12) * (j * editor->selected_machine->audio->input_pads) + (editor->selected_machine->audio->input_pads * 8) + 4;
+  }else if(!g_ascii_strncasecmp(base_note,
+		      "C#\0",
+		      3)){
+    j = (7 + j) + (editor->selected_machine->audio->input_pads % 12) * (j * editor->selected_machine->audio->input_pads) + (editor->selected_machine->audio->input_pads * 7) + 4;
+  }else if(!g_ascii_strncasecmp(base_note,
+		      "D\0",
+		      2)){
+    j = (6 + j) + (editor->selected_machine->audio->input_pads % 12) * (j * editor->selected_machine->audio->input_pads) + (editor->selected_machine->audio->input_pads * 6) + 4;
+  }else if(!g_ascii_strncasecmp(base_note,
+		      "D#\0",
+		      3)){
+    j = (5 + j) + (editor->selected_machine->audio->input_pads % 12) * (j * editor->selected_machine->audio->input_pads) + (editor->selected_machine->audio->input_pads * 5) + 4;
+  }else if(!g_ascii_strncasecmp(base_note,
+		      "E\0",
+		      2)){
+    j = (4 + j) + (editor->selected_machine->audio->input_pads % 12) * (j * editor->selected_machine->audio->input_pads) + (editor->selected_machine->audio->input_pads * 4) + 4;
+  }else if(!g_ascii_strncasecmp(base_note,
+		      "F\0",
+		      2)){
+    j = (3 + j) + (editor->selected_machine->audio->input_pads % 12) * (j * editor->selected_machine->audio->input_pads) + (editor->selected_machine->audio->input_pads * 3) + 4;
+  }else if(!g_ascii_strncasecmp(base_note,
+		      "F#\0",
+		      3)){
+    j = (2 + j) + (editor->selected_machine->audio->input_pads % 12) * (j * editor->selected_machine->audio->input_pads) + (editor->selected_machine->audio->input_pads * 2) + 4;
+  }else if(!g_ascii_strncasecmp(base_note,
+		      "G\0",
+		      2)){
+    j = (1 + j) + (editor->selected_machine->audio->input_pads % 12) * (j * editor->selected_machine->audio->input_pads) + (editor->selected_machine->audio->input_pads) + 4;
+  }else if(!g_ascii_strncasecmp(base_note,
+		      "G#\0",
+		      3)){
+    j = (j) + (editor->selected_machine->audio->input_pads % 12) * (j * editor->selected_machine->audio->input_pads) + 4;
+  }
+
+  j = j % 12;
+  
+  if(y[0] != 0){
+    y[0] = control_height - y[0];
+  }
+
+  y[1] = ((guint) (widget->allocation.height - border_top) - y[0]) % control_height;
+  i_stop = ((widget->allocation.height - border_top) - y[0] - y[1]) / control_height;
 
   cr = gdk_cairo_create(widget->window);
 
@@ -180,9 +267,9 @@ ags_piano_paint(AgsPiano *piano)
 
       cairo_set_source_rgb(cr, 0.68, 0.68, 0.68);
 
-      if(y[0] > editor->edit.note_edit->control_height / 2){
-	cairo_move_to(cr, 2.0 / 3.0 * (double) widget->allocation.width, (double) (y[0] - editor->edit.note_edit->control_height / 2) + border_top);
-	cairo_line_to(cr, (double) widget->allocation.width, (double) (y[0] - editor->edit.note_edit->control_height / 2) + border_top);
+      if(y[0] > control_height / 2){
+	cairo_move_to(cr, 2.0 / 3.0 * (double) widget->allocation.width, (double) (y[0] - control_height / 2) + border_top);
+	cairo_line_to(cr, (double) widget->allocation.width, (double) (y[0] - control_height / 2) + border_top);
 	cairo_stroke(cr);
       }
 
@@ -207,28 +294,28 @@ ags_piano_paint(AgsPiano *piano)
       // draw semi tone key
       cairo_set_source_rgb(cr, 0.2, 0.2, 0.2);
 
-      cairo_rectangle(cr, 0.0, (double) (i * editor->edit.note_edit->control_height + y[0] + border_top), 2.0 / 3.0 * (double) widget->allocation.width, (double) editor->edit.note_edit->control_height);
+      cairo_rectangle(cr, 0.0, (double) (i * control_height + y[0] + border_top), 2.0 / 3.0 * (double) widget->allocation.width, (double) control_height);
       cairo_fill(cr); 	
 
       cairo_set_source_rgb(cr, 0.68, 0.68, 0.68);
 
-      cairo_move_to(cr, 2.0 / 3.0 * (double) widget->allocation.width, (double) (i * editor->edit.note_edit->control_height + y[0] + border_top + editor->edit.note_edit->control_height / 2));
-      cairo_line_to(cr, (double) widget->allocation.width, (double) (i * editor->edit.note_edit->control_height + y[0] + border_top + editor->edit.note_edit->control_height / 2));
+      cairo_move_to(cr, 2.0 / 3.0 * (double) widget->allocation.width, (double) (i * control_height + y[0] + border_top + control_height / 2));
+      cairo_line_to(cr, (double) widget->allocation.width, (double) (i * control_height + y[0] + border_top + control_height / 2));
       cairo_stroke(cr);
 
-      cairo_move_to(cr, (double) widget->allocation.width, (double) (i * editor->edit.note_edit->control_height + y[0] + border_top));
-      cairo_line_to(cr, (double) widget->allocation.width, (double) (i * editor->edit.note_edit->control_height + y[0] + border_top + editor->edit.note_edit->control_height));
+      cairo_move_to(cr, (double) widget->allocation.width, (double) (i * control_height + y[0] + border_top));
+      cairo_line_to(cr, (double) widget->allocation.width, (double) (i * control_height + y[0] + border_top + control_height));
       cairo_stroke(cr);
     }else{
       // no semi tone key
       if(((1 << (j + 1)) & bitmap) == 0){
-	cairo_move_to(cr, 0.0, (double) (i * editor->edit.note_edit->control_height + y[0] + border_top + editor->edit.note_edit->control_height));
-	cairo_line_to(cr, (double) widget->allocation.width, (double) (i * editor->edit.note_edit->control_height + y[0] + border_top + editor->edit.note_edit->control_height));
+	cairo_move_to(cr, 0.0, (double) (i * control_height + y[0] + border_top + control_height));
+	cairo_line_to(cr, (double) widget->allocation.width, (double) (i * control_height + y[0] + border_top + control_height));
 	cairo_stroke(cr);
       }
 
-      cairo_move_to(cr, (double) widget->allocation.width, (double) (i * editor->edit.note_edit->control_height + y[0] + border_top));
-      cairo_line_to(cr, (double) widget->allocation.width, (double) (i * editor->edit.note_edit->control_height + y[0] + border_top + editor->edit.note_edit->control_height));
+      cairo_move_to(cr, (double) widget->allocation.width, (double) (i * control_height + y[0] + border_top));
+      cairo_line_to(cr, (double) widget->allocation.width, (double) (i * control_height + y[0] + border_top + control_height));
       cairo_stroke(cr);
     }
 
@@ -249,9 +336,9 @@ ags_piano_paint(AgsPiano *piano)
 
       cairo_set_source_rgb(cr, 0.68, 0.68, 0.68);
 
-      if(y[1] > editor->edit.note_edit->control_height / 2){
-	cairo_move_to(cr, 2.0 / 3.0 * (double) widget->allocation.width, (double) (widget->allocation.height - y[1] + editor->edit.note_edit->control_height / 2));
-	cairo_line_to(cr, (double) widget->allocation.width, (double) ((widget->allocation.height) - y[1] + editor->edit.note_edit->control_height / 2));
+      if(y[1] > control_height / 2){
+	cairo_move_to(cr, 2.0 / 3.0 * (double) widget->allocation.width, (double) (widget->allocation.height - y[1] + control_height / 2));
+	cairo_line_to(cr, (double) widget->allocation.width, (double) ((widget->allocation.height) - y[1] + control_height / 2));
 	cairo_stroke(cr);
       }
 

@@ -1,29 +1,39 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/X/ags_navigation.h>
 #include <ags/X/ags_navigation_callbacks.h>
 
-#include <ags/object/ags_connectable.h>
+#include <ags/main.h>
 
-#include <ags/object/ags_marshal.h>
+#include <ags-lib/object/ags_connectable.h>
 
+#include <ags/thread/ags_audio_loop.h>
+#include <ags/thread/ags_task_thread.h>
+
+#include <ags/audio/task/ags_seek_devout.h>
+
+#include <ags/X/ags_window.h>
 #include <ags/X/ags_editor.h>
+
+#include <ags/X/editor/ags_note_edit.h>
+#include <ags/X/editor/ags_pattern_edit.h>
 
 void ags_navigation_class_init(AgsNavigationClass *navigation);
 void ags_navigation_connectable_interface_init(AgsConnectableInterface *connectable);
@@ -43,8 +53,7 @@ void ags_navigation_destroy(GtkObject *object);
 void ags_navigation_show(GtkWidget *widget);
 
 void ags_navigation_real_change_position(AgsNavigation *navigation,
-					 gdouble tact,
-					 gdouble bpm);
+					 gdouble tact);
 
 /**
  * SECTION:ags_navigation
@@ -59,7 +68,7 @@ void ags_navigation_real_change_position(AgsNavigation *navigation,
 
 enum{
   PROP_0,
-  PROP_SOUNDCARD,
+  PROP_DEVOUT,
 };
 
 enum{
@@ -125,19 +134,19 @@ ags_navigation_class_init(AgsNavigationClass *navigation)
 
   /* properties */
   /**
-   * AgsNavigation:soundcard:
+   * AgsNavigation:devout:
    *
-   * The assigned #GObject to use as default sink.
+   * The assigned #AgsDevout to use as default sink.
    * 
    * Since: 0.4
    */
-  param_spec = g_param_spec_object("soundcard\0",
-				   "assigned soundcard\0",
-				   "The soundcard it is assigned with\0",
+  param_spec = g_param_spec_object("devout\0",
+				   "assigned devout\0",
+				   "The devout it is assigned with\0",
 				   G_TYPE_OBJECT,
 				   G_PARAM_READABLE | G_PARAM_WRITABLE);
   g_object_class_install_property(gobject,
-				  PROP_SOUNDCARD,
+				  PROP_DEVOUT,
 				  param_spec);
 
   /* AgsNavigationClass */
@@ -157,7 +166,7 @@ ags_navigation_class_init(AgsNavigationClass *navigation)
 		 G_SIGNAL_RUN_LAST,
 		 G_STRUCT_OFFSET (AgsNavigationClass, change_position),
 		 NULL, NULL,
-		 g_cclosure_user_marshal_VOID__DOUBLE_DOUBLE,
+		 g_cclosure_marshal_VOID__DOUBLE,
 		 G_TYPE_NONE, 1,
 		 G_TYPE_DOUBLE);
 }
@@ -177,13 +186,15 @@ ags_navigation_init(AgsNavigation *navigation)
   GtkHBox *hbox;
   GtkLabel *label;
 
-  navigation->flags = 0;
+  navigation->flags = AGS_NAVIGATION_BLOCK_TIC;
 
-  navigation->soundcard = NULL;
+  navigation->devout = NULL;
 
   g_signal_connect_after(G_OBJECT(navigation), "parent-set\0",
 			 G_CALLBACK(ags_navigation_parent_set_callback), NULL);
 
+  navigation->start_tact = 0.0;
+  
   /* GtkWidget */
   hbox = (GtkHBox *) gtk_hbox_new(FALSE, 0);
   gtk_box_pack_start((GtkBox *) navigation, (GtkWidget *) hbox, FALSE, FALSE, 2);
@@ -202,7 +213,7 @@ ags_navigation_init(AgsNavigation *navigation)
 
   navigation->current_bpm = 120.0;
 
-  navigation->rewind = (GtkToggleButton *) g_object_new(GTK_TYPE_TOGGLE_BUTTON,
+  navigation->rewind = (GtkToggleButton *) g_object_new(GTK_TYPE_BUTTON,
 							"image\0", (GtkWidget *) gtk_image_new_from_stock(GTK_STOCK_MEDIA_REWIND, GTK_ICON_SIZE_LARGE_TOOLBAR),
 							NULL);
   gtk_box_pack_start((GtkBox *) hbox, (GtkWidget *) navigation->rewind, FALSE, FALSE, 0);
@@ -227,15 +238,13 @@ ags_navigation_init(AgsNavigation *navigation)
 						NULL);
   gtk_box_pack_start((GtkBox *) hbox, (GtkWidget *) navigation->next, FALSE, FALSE, 0);
 
-  navigation->forward = (GtkToggleButton *) g_object_new(GTK_TYPE_TOGGLE_BUTTON,
+  navigation->forward = (GtkToggleButton *) g_object_new(GTK_TYPE_BUTTON,
 							 "image\0", (GtkWidget *) gtk_image_new_from_stock(GTK_STOCK_MEDIA_FORWARD, GTK_ICON_SIZE_LARGE_TOOLBAR),
 							 NULL);
   gtk_box_pack_start((GtkBox *) hbox, (GtkWidget *) navigation->forward, FALSE, FALSE, 0);
 
 
   navigation->loop = (GtkCheckButton *) gtk_check_button_new_with_label("loop\0");
-  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(navigation->loop),
-			       TRUE);
   gtk_box_pack_start((GtkBox *) hbox, (GtkWidget *) navigation->loop, FALSE, FALSE, 2);
 
   label = (GtkLabel *) gtk_label_new("position\0");
@@ -255,11 +264,12 @@ ags_navigation_init(AgsNavigation *navigation)
   g_object_set(navigation->duration_time,
 	       "label\0", g_strdup("0000:00.00\0"),
 	       NULL);
-  gtk_widget_queue_draw(navigation->duration_time);
+  gtk_widget_queue_draw((GtkWidget *) navigation->duration_time);
   gtk_box_pack_start((GtkBox *) hbox, (GtkWidget *) navigation->duration_time, FALSE, FALSE, 2);
 
-  navigation->duration_tact = (GtkSpinButton *) gtk_spin_button_new_with_range(0.0, AGS_NOTE_EDIT_MAX_CONTROLS * 64.0, 1.0);
-  gtk_box_pack_start((GtkBox *) hbox, (GtkWidget *) navigation->duration_tact, FALSE, FALSE, 2);
+  navigation->duration_tact = NULL;
+  //  navigation->duration_tact = (GtkSpinButton *) gtk_spin_button_new_with_range(0.0, AGS_NOTE_EDIT_MAX_CONTROLS * 64.0, 1.0);
+  //  gtk_box_pack_start((GtkBox *) hbox, (GtkWidget *) navigation->duration_tact, FALSE, FALSE, 2);
 
 
   /* expansion */
@@ -281,10 +291,17 @@ ags_navigation_init(AgsNavigation *navigation)
 			    4.0);
   gtk_box_pack_start((GtkBox *) hbox, (GtkWidget *) navigation->loop_right_tact, FALSE, FALSE, 2);
 
+  navigation->scroll = NULL;
   navigation->scroll = (GtkCheckButton *) gtk_check_button_new_with_label("auto-scroll\0");
   gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(navigation->scroll),
-			       TRUE);
+			       FALSE);
   gtk_box_pack_start((GtkBox *) hbox, (GtkWidget *) navigation->scroll, FALSE, FALSE, 2);
+
+  navigation->exclude_sequencer = (GtkCheckButton *) gtk_check_button_new_with_label("exclude sequencers\0");
+  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(navigation->exclude_sequencer),
+			       TRUE);
+  gtk_box_pack_start((GtkBox *) hbox, (GtkWidget *) navigation->exclude_sequencer, FALSE, FALSE, 2);
+
 }
 
 void
@@ -298,19 +315,19 @@ ags_navigation_set_property(GObject *gobject,
   navigation = AGS_NAVIGATION(gobject);
 
   switch(prop_id){
-  case PROP_SOUNDCARD:
+  case PROP_DEVOUT:
     {
-      GObject *soundcard;
+      AgsDevout *devout;
 
-      soundcard = (GObject *) g_value_get_object(value);
+      devout = (AgsDevout *) g_value_get_object(value);
 
-      if(navigation->soundcard == soundcard)
+      if(navigation->devout == devout)
 	return;
 
-      if(soundcard != NULL)
-	g_object_ref(soundcard);
+      if(devout != NULL)
+	g_object_ref(devout);
 
-      navigation->soundcard = soundcard;
+      navigation->devout = devout;
     }
     break;
   default:
@@ -330,8 +347,8 @@ ags_navigation_get_property(GObject *gobject,
   navigation = AGS_NAVIGATION(gobject);
 
   switch(prop_id){
-  case PROP_SOUNDCARD:
-    g_value_set_object(value, navigation->soundcard);
+  case PROP_DEVOUT:
+    g_value_set_object(value, navigation->devout);
     break;
   default:
     G_OBJECT_WARN_INVALID_PROPERTY_ID(gobject, prop_id, param_spec);
@@ -382,12 +399,15 @@ ags_navigation_connect(AgsConnectable *connectable)
   g_signal_connect_after((GObject *) navigation->position_tact, "value-changed\0",
 			 G_CALLBACK(ags_navigation_position_tact_callback), (gpointer) navigation);
 
-  g_signal_connect((GObject *) navigation->duration_tact, "value-changed\0",
-		   G_CALLBACK(ags_navigation_duration_tact_callback), (gpointer) navigation);
+  //  g_signal_connect((GObject *) navigation->duration_tact, "value-changed\0",
+  //		   G_CALLBACK(ags_navigation_duration_tact_callback), (gpointer) navigation);
 
-  /* soundcard */
-  g_signal_connect_after((GObject *) navigation->soundcard, "tic\0",
+  /* devout */
+  g_signal_connect_after((GObject *) navigation->devout, "tic\0",
   			 G_CALLBACK(ags_navigation_tic_callback), (gpointer) navigation);
+
+  g_signal_connect_after((GObject *) navigation->devout, "stop\0",
+  			 G_CALLBACK(ags_navigation_devout_stop_callback), (gpointer) navigation);
 
   /* expansion */
   g_signal_connect((GObject *) navigation->loop_left_tact, "value-changed\0",
@@ -427,21 +447,61 @@ ags_navigation_show(GtkWidget *widget)
 
 void
 ags_navigation_real_change_position(AgsNavigation *navigation,
-				    gdouble tact,
-				    gdouble bpm)
+				    gdouble tact_counter)
 {
-  gchar *timestr, *str;
+  AgsWindow *window;
+  AgsEditor *editor;
+  AgsSeekDevout *seek_devout;
+  gchar *timestr;
+  double tact_factor, zoom_factor;
+  double tact;
+  gdouble delay;
+  guint steps;
+  gboolean move_forward;
+  
+  window = AGS_WINDOW(gtk_widget_get_toplevel(GTK_WIDGET(navigation)));
+  editor = window->editor;
 
-  g_object_get(navigation->duration_time,
-	       "label\0", &str,
-	       NULL);
-  ags_navigation_update_time_string(tact,
-  				    str,
-				    bpm);
-  //  g_object_set(navigation->duration_time,
-  //	       "label\0", str,
-  //	       NULL);
-  //  gtk_widget_show_all(navigation->duration_time);
+  /* seek devout */
+  delay = window->devout->delay[window->devout->tic_counter];
+
+  tact = window->devout->tact_counter - navigation->start_tact;
+  
+  if(tact < tact_counter){
+    steps = (guint) ((tact_counter - tact) * delay);
+    move_forward = TRUE;
+  }else{
+    steps = (guint) ((navigation->start_tact - tact) * delay);
+    move_forward = FALSE;
+  }
+  
+  seek_devout = ags_seek_devout_new(window->devout,
+				    steps,
+				    move_forward);
+
+  ags_task_thread_append_task(AGS_TASK_THREAD(AGS_AUDIO_LOOP(AGS_MAIN(window->ags_main)->main_loop)->task_thread),
+			      AGS_TASK(seek_devout));
+
+  /* update GUI */
+  zoom_factor = 0.25;
+
+  tact_factor = exp2(6.0 - (double) gtk_combo_box_get_active((GtkComboBox *) editor->toolbar->zoom));
+  tact = exp2((double) gtk_combo_box_get_active((GtkComboBox *) editor->toolbar->zoom) - 2.0);
+
+  if(AGS_IS_NOTE_EDIT(editor->current_edit_widget)){
+    gtk_adjustment_set_value(GTK_RANGE(AGS_NOTE_EDIT(editor->current_edit_widget)->hscrollbar)->adjustment,
+			     tact_counter * AGS_NOTE_EDIT(editor->current_edit_widget)->control_current.control_width * (16.0 / tact_factor));
+  }else if(AGS_IS_PATTERN_EDIT(editor->current_edit_widget)){
+    gtk_adjustment_set_value(GTK_RANGE(AGS_PATTERN_EDIT(editor->current_edit_widget)->hscrollbar)->adjustment,
+			     tact_counter * AGS_PATTERN_EDIT(editor->current_edit_widget)->control_current.control_width * (16.0 / tact_factor));
+  }
+  
+  timestr = ags_navigation_tact_to_time_string(tact_counter,
+					       navigation->bpm->adjustment->value,
+					       window->devout->delay_factor);
+  gtk_label_set_text(navigation->position_time, timestr);
+  
+  g_free(timestr);
 }
 
 /**
@@ -456,15 +516,14 @@ ags_navigation_real_change_position(AgsNavigation *navigation,
  */
 void
 ags_navigation_change_position(AgsNavigation *navigation,
-			       gdouble tact,
-			       gdouble bpm)
+			       gdouble tact)
 {
   g_return_if_fail(AGS_IS_NAVIGATION(navigation));
 
   g_object_ref(G_OBJECT(navigation));
   g_signal_emit(G_OBJECT(navigation),
 		navigation_signals[CHANGE_POSITION], 0,
-		tact, bpm);
+		tact);
   g_object_unref(G_OBJECT(navigation));
 }
 
@@ -480,7 +539,8 @@ ags_navigation_change_position(AgsNavigation *navigation,
  */
 gchar*
 ags_navigation_tact_to_time_string(gdouble tact,
-				   gdouble bpm)
+				   gdouble bpm,
+				   gdouble delay_factor)
 {
   static gdouble delay_min, delay_sec, delay_hsec;
   static gboolean initialized = FALSE;
@@ -489,7 +549,7 @@ ags_navigation_tact_to_time_string(gdouble tact,
   guint min, sec, hsec;
 
   if(!initialized){
-    delay_min = bpm;
+    delay_min = bpm * (60.0 / bpm) * (60.0 / bpm) * delay_factor;
     delay_sec = delay_min / 60.0;
     delay_hsec = delay_sec / 100.0;
 
@@ -528,22 +588,18 @@ ags_navigation_tact_to_time_string(gdouble tact,
  */
 void
 ags_navigation_update_time_string(double tact,
-				  gchar *time_string,
-				  gdouble bpm)
+				  gdouble bpm,
+				  gdouble delay_factor,
+				  gchar *time_string)
 {
-  static gdouble delay_min, delay_sec, delay_hsec;
-  static gboolean initialized = FALSE;
+  gdouble delay_min, delay_sec, delay_hsec;
   gchar *timestr;
   gdouble tact_redux;
   guint min, sec, hsec;
 
-  if(!initialized){
-    delay_min = bpm;
-    delay_sec = delay_min / 60.0;
-    delay_hsec = delay_sec / 100.0;
-
-    initialized = TRUE;
-  }
+  delay_min = bpm * (60.0 / bpm) * (60.0 / bpm) * delay_factor;
+  delay_sec = delay_min / 60.0;
+  delay_hsec = delay_sec / 100.0;
 
   tact_redux = 1.0 / 16.0;
 
@@ -564,6 +620,39 @@ ags_navigation_update_time_string(double tact,
   sprintf(time_string, "%.4d:%.2d.%.2d\0", min, sec, hsec);
 }
 
+gchar*
+ags_navigation_relative_tact_to_time_string(gchar *timestr,
+					    gdouble delay,
+					    gdouble bpm,
+					    gdouble delay_factor)
+{
+  gchar *tmp;
+  guint min, sec, hsec;
+  guint prev_min, prev_sec, prev_hsec;
+
+  gdouble sec_value;
+
+  tmp = sscanf(timestr, "%d:%d.%d", &prev_min, &prev_sec, &prev_hsec);
+  sec_value = prev_min * 60.0;
+  sec_value += prev_sec;
+
+  if(prev_hsec != 0){
+    sec_value += (prev_hsec / 100.0);
+  }
+  
+  sec_value += (1.0 / delay * delay_factor);
+
+  min = (guint) floor(sec_value / 60);
+
+  sec = sec_value - 60 * min;
+
+  hsec = (sec_value - sec - min * 60) * 100;
+
+  timestr = g_strdup_printf("%.4d:%.2d.%.2d\0", min, sec, hsec);
+  
+  return(timestr);
+}
+
 /**
  * ags_navigation_set_seeking_sensitive_new:
  * @navigation: the #AgsNavigation
@@ -577,17 +666,17 @@ void
 ags_navigation_set_seeking_sensitive(AgsNavigation *navigation,
 				     gboolean enabled)
 {
-  gtk_widget_set_sensitive(navigation->rewind,
+  gtk_widget_set_sensitive((GtkWidget *) navigation->rewind,
 			   enabled);
-  gtk_widget_set_sensitive(navigation->previous,
+  gtk_widget_set_sensitive((GtkWidget *) navigation->previous,
 			   enabled);
-  gtk_widget_set_sensitive(navigation->play,
+  gtk_widget_set_sensitive((GtkWidget *) navigation->play,
 			   enabled);
-  gtk_widget_set_sensitive(navigation->stop,
+  gtk_widget_set_sensitive((GtkWidget *) navigation->stop,
 			   enabled);
-  gtk_widget_set_sensitive(navigation->next,
+  gtk_widget_set_sensitive((GtkWidget *) navigation->next,
 			   enabled);
-  gtk_widget_set_sensitive(navigation->forward,
+  gtk_widget_set_sensitive((GtkWidget *) navigation->forward,
 			   enabled);
 }
 

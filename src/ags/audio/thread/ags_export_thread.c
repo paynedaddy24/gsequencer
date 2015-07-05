@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2013 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/audio/thread/ags_export_thread.h>
@@ -52,7 +53,6 @@ void ags_export_thread_stop(AgsThread *thread);
 
 enum{
   PROP_0,
-  PROP_SOUNDCARD,
   PROP_AUDIO_FILE,
 };
 
@@ -114,29 +114,6 @@ ags_export_thread_class_init(AgsExportThreadClass *export_thread)
   gobject->finalize = ags_export_thread_finalize;
 
   /* properties */
-  /**
-   * AgsExportThread:soundcard:
-   *
-   * The assigned #AgsSoundcard.
-   * 
-   * Since: 0.4
-   */
-  param_spec = g_param_spec_object("soundcard\0",
-				   "soundcard assigned to\0",
-				   "The AgsSoundcard it is assigned to.\0",
-				   G_TYPE_OBJECT,
-				   G_PARAM_WRITABLE);
-  g_object_class_install_property(gobject,
-				  PROP_SOUNDCARD,
-				  param_spec);
-
-  /**
-   * AgsExportThread:audio-file:
-   *
-   * The assigned #AgsAudioFile.
-   * 
-   * Since: 0.4
-   */
   param_spec = g_param_spec_object("audio-file\0",
 				   "audio file to write\0",
 				   "The audio file to write output.\0",
@@ -175,9 +152,6 @@ ags_export_thread_init(AgsExportThread *export_thread)
 
   export_thread->tic = 0;
   export_thread->counter = 0;
-
-  export_thread->soundcard = NULL;
-
   export_thread->audio_file = NULL;
 }
 
@@ -192,23 +166,6 @@ ags_export_thread_set_property(GObject *gobject,
   export_thread = AGS_EXPORT_THREAD(gobject);
 
   switch(prop_id){
-  case PROP_SOUNDCARD:
-    {
-      GObject *soundcard;
-
-      soundcard = (GObject *) g_value_get_object(value);
-
-      if(export_thread->soundcard != NULL){
-	g_object_unref(G_OBJECT(export_thread->soundcard));
-      }
-
-      if(soundcard != NULL){
-	g_object_ref(G_OBJECT(soundcard));
-      }
-
-      export_thread->soundcard = G_OBJECT(soundcard);
-    }
-    break;
   case PROP_AUDIO_FILE:
     {
       AgsAudioFile *audio_file;
@@ -247,11 +204,6 @@ ags_export_thread_get_property(GObject *gobject,
   export_thread = AGS_EXPORT_THREAD(gobject);
 
   switch(prop_id){
-  case PROP_SOUNDCARD:
-    {
-      g_value_set_object(value, G_OBJECT(export_thread->soundcard));
-    }
-    break;
   case PROP_AUDIO_FILE:
     {
       g_value_set_object(value, export_thread->audio_file);
@@ -290,8 +242,14 @@ ags_export_thread_finalize(GObject *gobject)
 void
 ags_export_thread_start(AgsThread *thread)
 {
+  AgsExportThread *export_thread;
+  
   //TODO:JK: implement me
   g_message("export start");
+
+  export_thread = (AgsExportThread *) thread;
+  
+  export_thread->counter = 0;
 
   AGS_THREAD_CLASS(ags_export_thread_parent_class)->start(thread);
 }
@@ -312,7 +270,7 @@ ags_export_thread_run(AgsThread *thread)
     export_thread->counter += 1;
   }
 
-  soundcard = AGS_SOUNDCARD(export_thread->soundcard);
+  devout =  (AgsDevout *) thread->devout;
 
   soundcard_buffer = ags_soundcard_get_buffer(soundcard);
   ags_soundcard_get_presets(soundcard,

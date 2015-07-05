@@ -1,36 +1,40 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2014 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/audio/ags_recall_ladspa.h>
+
+#include <ags/main.h>
+
+#include <ags-lib/object/ags_connectable.h>
 
 #include <ags/util/ags_id_generator.h>
 
 #include <ags/plugin/ags_ladspa_manager.h>
 
-#include <ags/object/ags_application_context.h>
-#include <ags/object/ags_connectable.h>
 #include <ags/object/ags_plugin.h>
-#include <ags/object/ags_soundcard.h>
 
 #include <ags/file/ags_file.h>
 #include <ags/file/ags_file_stock.h>
 #include <ags/file/ags_file_id_ref.h>
 
+#include <ags/audio/ags_config.h>
+#include <ags/audio/ags_devout.h>
 #include <ags/audio/ags_port.h>
 
 #include <dlfcn.h>
@@ -80,6 +84,8 @@ enum{
   PROP_EFFECT,
   PROP_INDEX,
 };
+
+extern AgsConfig *config;
 
 static gpointer ags_recall_ladspa_parent_class = NULL;
 static AgsConnectableInterface* ags_recall_ladspa_parent_connectable_interface;
@@ -224,8 +230,8 @@ void
 ags_recall_ladspa_init(AgsRecallLadspa *recall_ladspa)
 {
   AGS_RECALL(recall_ladspa)->name = "ags-ladspa\0";
-  AGS_RECALL(recall_ladspa)->version = AGS_RECALL_DEFAULT_VERSION;
-  AGS_RECALL(recall_ladspa)->build_id = AGS_RECALL_DEFAULT_BUILD_ID;
+  AGS_RECALL(recall_ladspa)->version = AGS_EFFECTS_DEFAULT_VERSION;
+  AGS_RECALL(recall_ladspa)->build_id = AGS_BUILD_ID;
   AGS_RECALL(recall_ladspa)->xml_type = "ags-recall-ladspa\0";
   AGS_RECALL(recall_ladspa)->port = NULL;
 
@@ -255,6 +261,7 @@ ags_recall_ladspa_set_property(GObject *gobject,
   switch(prop_id){
   case PROP_FILENAME:
     {
+      AgsDevout *devout;
       gchar *filename;
 
       filename = g_value_get_string(value);
@@ -289,7 +296,7 @@ ags_recall_ladspa_set_property(GObject *gobject,
     break;
   case PROP_INDEX:
     {
-      unsigned long *effect_index;
+      unsigned long index;
       
       effect_index = g_value_get_ulong(value);
 
@@ -329,7 +336,7 @@ ags_recall_ladspa_get_property(GObject *gobject,
     break;
   case PROP_INDEX:
     {
-      g_value_set_ulong(value, recall_ladspa->effect_index);
+      g_value_set_uint(value, recall_ladspa->index);
     }
     break;
   default:
@@ -468,7 +475,7 @@ ags_recall_ladspa_read(AgsFile *file, xmlNode *node, AgsPlugin *plugin)
 
   ags_file_add_id_ref(file,
 		      g_object_new(AGS_TYPE_FILE_ID_REF,
-				   "application-context\0", file->application_context,
+				   "main\0", file->ags_main,
 				   "file\0", file,
 				   "node\0", node,
 				   "xpath\0", g_strdup_printf("xpath=//*[@id='%s']\0", xmlGetProp(node, AGS_FILE_ID_PROP)),
@@ -498,7 +505,6 @@ ags_recall_ladspa_write(AgsFile *file, xmlNode *parent, AgsPlugin *plugin)
 {
   AgsRecallLadspa *recall_ladspa;
   xmlNode *node;
-  GList *list;
   gchar *id;
 
   recall_ladspa = AGS_RECALL_LADSPA(plugin);
@@ -513,7 +519,7 @@ ags_recall_ladspa_write(AgsFile *file, xmlNode *parent, AgsPlugin *plugin)
 
   ags_file_add_id_ref(file,
 		      g_object_new(AGS_TYPE_FILE_ID_REF,
-				   "application-context\0", file->application_context,
+				   "main\0", file->ags_main,
 				   "file\0", file,
 				   "node\0", node,
 				   "xpath\0", g_strdup_printf("xpath=//*[@id='%s']\0", id),
@@ -660,7 +666,7 @@ ags_recall_ladspa_load_ports(AgsRecallLadspa *recall_ladspa)
 	      recall_ladspa->output_port[0] = i;
 	    }else{
 	      recall_ladspa->output_port = (unsigned long *) realloc(recall_ladspa->output_port,
-								     (recall_ladspa->output_lines + 1) * sizeof(unsigned long));
+							    (recall_ladspa->output_lines + 1) * sizeof(unsigned long));
 	      recall_ladspa->output_port[recall_ladspa->output_lines] = i;
 	    }
 
@@ -721,7 +727,7 @@ ags_recall_ladspa_float_to_short(float *buffer,
   new_buffer = destination;
 
   for(i = 0; i < buffer_size; i++){
-    new_buffer[i] += (signed short) buffer[lines * i] * 32767.5f;
+    new_buffer[i] = (signed short) buffer[lines * i] * 32767.5f;
   }
 }
 
@@ -776,17 +782,17 @@ ags_recall_ladspa_new(AgsChannel *source,
 		      gchar *effect,
 		      unsigned long effect_index)
 {
-  GObject *soundcard;
+  AgsDevout *devout;
   AgsRecallLadspa *recall_ladspa;
 
   if(source != NULL){
-    soundcard = AGS_AUDIO(source->audio)->soundcard;
+    devout = (AgsDevout *) AGS_AUDIO(source->audio)->devout;
   }else{
-    soundcard = NULL;
+    devout = NULL;
   }
 
   recall_ladspa = (AgsRecallLadspa *) g_object_new(AGS_TYPE_RECALL_LADSPA,
-						   "soundcard\0", soundcard,
+						   "devout\0", devout,
 						   "source\0", source,
 						   "filename\0", filename,
 						   "effect\0", effect,

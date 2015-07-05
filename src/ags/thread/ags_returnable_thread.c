@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2013 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/thread/ags_returnable_thread.h>
@@ -110,7 +111,7 @@ ags_returnable_thread_class_init(AgsReturnableThreadClass *returnable_thread)
   gobject->finalize = ags_returnable_thread_finalize;
 
   /* AgsThreadClass */
-  thread = (AgsThread *) returnable_thread;
+  thread = (AgsThreadClass *) returnable_thread;
 
   thread->start = ags_returnable_thread_start;
   thread->run = ags_returnable_thread_run;
@@ -157,7 +158,7 @@ ags_returnable_thread_init(AgsReturnableThread *returnable_thread)
 
   g_atomic_int_set(&(returnable_thread->flags),
 		   0);
-  
+
   returnable_thread->reset_mutex = (pthread_mutex_t *) malloc(sizeof(pthread_mutex_t));
   pthread_mutex_init(returnable_thread->reset_mutex, NULL);
   
@@ -207,7 +208,7 @@ ags_returnable_thread_run(AgsThread *thread)
   
   /* retrieve some variables */
   returnable_thread = AGS_RETURNABLE_THREAD(thread);
-  thread_pool = returnable_thread->thread_pool;
+  thread_pool = (AgsThreadPool *) returnable_thread->thread_pool;
   
   if((AGS_THREAD_INITIAL_RUN & (g_atomic_int_get(&(thread->flags)))) != 0){
 #ifdef AGS_DEBUG

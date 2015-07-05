@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef __AGS_THREAD_H__
@@ -95,8 +96,12 @@ struct _AgsThread
 
   volatile guint flags;
 
+  gboolean rt_setup;
+  
   sigset_t wait_mask;
 
+  GObject *devout;
+  
   pthread_t *thread;
   pthread_attr_t thread_attr;
 
@@ -175,6 +180,8 @@ AgsThread* ags_thread_last(AgsThread *thread);
 
 void ags_thread_remove_child(AgsThread *thread, AgsThread *child);
 void ags_thread_add_child(AgsThread *thread, AgsThread *child);
+void ags_thread_add_child_extended(AgsThread *thread, AgsThread *child,
+				   gboolean no_start, gboolean no_Wait);
 
 gboolean ags_thread_parental_is_locked(AgsThread *thread, AgsThread *parent);
 gboolean ags_thread_sibling_is_locked(AgsThread *thread);

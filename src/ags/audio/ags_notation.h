@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef __AGS_NOTATION_H__
@@ -43,6 +44,10 @@
 #define AGS_NOTATION_DEFAULT_JIFFIE (60.0 / AGS_NOTATION_DEFAULT_BPM / AGS_NOTATION_TICS_PER_BEAT)
 #define AGS_NOTATION_DEFAULT_DURATION (AGS_NOTATION_DEFAULT_LENGTH * AGS_NOTATION_DEFAULT_JIFFIE * AGS_MICROSECONDS_PER_SECOND)
 
+#define AGS_NOTATION_CLIPBOARD_VERSION "0.4.2\0"
+#define AGS_NOTATION_CLIPBOARD_TYPE "AgsNotationClipboardXml\0"
+#define AGS_NOTATION_CLIPBOARD_FORMAT "AgsNotationNativePiano\0"
+
 typedef struct _AgsNotation AgsNotation;
 typedef struct _AgsNotationClass AgsNotationClass;
 
@@ -63,6 +68,7 @@ struct _AgsNotation
   GObject *audio;
 
   gchar *key;
+  gchar *base_note;
   gdouble base_frequency;
 
   gdouble tact;
@@ -114,6 +120,7 @@ GList* ags_notation_find_region(AgsNotation *notation,
 				gboolean use_selection_list);
 
 void ags_notation_free_selection(AgsNotation *notation);
+void ags_notation_add_all_to_selection(AgsNotation *notation);
 
 void ags_notation_add_point_to_selection(AgsNotation *notation,
 					 guint x, guint y,

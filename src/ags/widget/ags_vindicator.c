@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2013 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include "ags_vindicator.h"
@@ -84,7 +85,7 @@ ags_vindicator_class_init(AgsVIndicatorClass *indicator)
 void
 ags_vindicator_init(AgsVIndicator *indicator)
 {
-  gtk_widget_set_size_request(indicator,
+  gtk_widget_set_size_request((GtkWidget *) indicator,
 			      16,
 			      100);
 }
@@ -93,7 +94,7 @@ gboolean
 ags_vindicator_configure(GtkWidget *widget,
 			 GdkEventConfigure *event)
 {
-  ags_vindicator_draw(widget);
+  ags_vindicator_draw((AgsVIndicator *) widget);
 
   return(FALSE);
 }
@@ -102,7 +103,7 @@ gboolean
 ags_vindicator_expose(GtkWidget *widget,
 		     GdkEventExpose *event)
 {
-  ags_vindicator_draw(widget);
+  ags_vindicator_draw((AgsVIndicator *) widget);
 
   return(FALSE);
 }
@@ -142,7 +143,7 @@ ags_vindicator_draw(AgsVIndicator *indicator)
 
   for(i = 0; i < height / (segment_height + padding); i++){
     if(adjustment->value > 0.0 &&
-       (1 / adjustment->value * i < (height / (segment_height + padding)))){
+       (1.0 / adjustment->value * i < (height / (segment_height + padding)))){
       /* active */
       cairo_set_source_rgba(cr, 0.9, 0.7, 0.2, 1.0);
     }else{

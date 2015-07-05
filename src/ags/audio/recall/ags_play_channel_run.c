@@ -1,36 +1,32 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/audio/recall/ags_play_channel_run.h>
 
-#include <ags/object/ags_application_context.h>
-#include <ags/object/ags_connectable.h>
+#include <ags-lib/object/ags_connectable.h>
+
+#include <ags/main.h>
+
 #include <ags/object/ags_dynamic_connectable.h>
 #include <ags/object/ags_plugin.h>
-#include <ags/object/ags_soundcard.h>
 
-#ifdef AGS_USE_LINUX_THREADS
-#include <ags/thread/ags_thread-kthreads.h>
-#else
-#include <ags/thread/ags_thread-posix.h>
-#endif 
-#include <ags/thread/ags_task_thread.h>
-
+#include <ags/audio/ags_devout.h>
 #include <ags/audio/ags_audio.h>
 #include <ags/audio/ags_playback.h>
 #include <ags/audio/ags_recycling.h>
@@ -231,8 +227,8 @@ void
 ags_play_channel_run_init(AgsPlayChannelRun *play_channel_run)
 {
   AGS_RECALL(play_channel_run)->name = "ags-play\0";
-  AGS_RECALL(play_channel_run)->version = AGS_RECALL_DEFAULT_VERSION;
-  AGS_RECALL(play_channel_run)->build_id = AGS_RECALL_DEFAULT_BUILD_ID;
+  AGS_RECALL(play_channel_run)->version = AGS_EFFECTS_DEFAULT_VERSION;
+  AGS_RECALL(play_channel_run)->build_id = AGS_BUILD_ID;
   AGS_RECALL(play_channel_run)->xml_type = "ags-play-channel-run\0";
   AGS_RECALL(play_channel_run)->port = NULL;
 
@@ -380,48 +376,8 @@ ags_play_channel_run_run_init_inter(AgsRecall *recall)
 void
 ags_play_channel_run_run_pre(AgsRecall *recall)
 {
-  AgsChannel *source;
-  AgsRecycling *recycling;
-  AgsAudioSignal *audio_signal;
-  gdouble delay;
-  guint attack;
-  guint tic_counter_incr;
-
-  //    g_message("ags_copy_pattern_channel_run_sequencer_alloc_callback - playing channel: %u; playing pattern: %u\0",
-  //	      AGS_RECALL_CHANNEL(copy_pattern_channel)->source->line,
-  //	      copy_pattern_audio_run->count_beats_audio_run->sequencer_counter);
-
-  /* get source */
-  source = AGS_RECALL_CHANNEL_RUN(recall)->source;
-
-  /* create new audio signals */
-  recycling = source->first_recycling;
-
-  attack = 0;
-  delay = 0.0;
-
-  if(recycling != NULL){
-    while(recycling != source->last_recycling->next){    
-      audio_signal = ags_audio_signal_new((GObject *) recall->soundcard,
-					  (GObject *) recycling,
-					  (GObject *) recall->recall_id);
-      ags_recycling_create_audio_signal_with_defaults(recycling,
-						      audio_signal,
-						      delay, attack);
-      audio_signal->stream_current = audio_signal->stream_beginning;
-      ags_audio_signal_connect(audio_signal);
-	
-      /*
-       * emit add_audio_signal on AgsRecycling
-       */
-      ags_recycling_add_audio_signal(recycling,
-				     audio_signal);
-
-      /*  */
-      recycling = recycling->next;
-    }
-  }
-
+  /* empty */
+  
   /* call parent */
   AGS_RECALL_CLASS(ags_play_channel_run_parent_class)->run_pre(recall);
 }
@@ -447,9 +403,9 @@ ags_play_channel_run_run_post(AgsRecall *recall)
   source = AGS_RECALL_CHANNEL_RUN(recall)->source;
   found = FALSE;
 
-  list = ags_recall_find_type_with_recycling_context(source->play,
-						     AGS_TYPE_STREAM_CHANNEL_RUN,
-						     recall->recall_id->recycling_context);
+  list = ags_recall_find_type_with_recycling_container(source->play,
+						       AGS_TYPE_STREAM_CHANNEL_RUN,
+						       (GObject *) recall->recall_id->recycling_container);
   stream_channel_run = AGS_STREAM_CHANNEL_RUN(list->data);
   
   recall_recycling_list = AGS_RECALL(stream_channel_run)->children;
@@ -470,7 +426,7 @@ ags_play_channel_run_run_post(AgsRecall *recall)
   }
 
   if(!found){
-    ags_play_channel_run_stop(recall);
+    ags_play_channel_run_stop((AgsPlayChannelRun *) recall);
   }
 }
 
@@ -554,31 +510,21 @@ ags_play_channel_run_stream_audio_signal_done_callback(AgsRecall *recall,
 void
 ags_play_channel_run_stop(AgsPlayChannelRun *play_channel_run)
 {
+  AgsThread *task_thread;
   AgsChannel *channel;
   AgsCancelChannel *cancel_channel;
-  AgsThread *main_loop;
-  AgsThread *task_thread;
-  AgsApplicationContext *application_context;
-  AgsSoundcard *soundcard;
 
   channel = AGS_RECALL_CHANNEL_RUN(play_channel_run)->source;
-
-  soundcard = AGS_SOUNDCARD(AGS_RECALL(play_channel_run)->soundcard);
-
-  application_context = ags_soundcard_get_application_context(soundcard);
-
-  main_loop = application_context->main_loop;
-  
-  task_thread = (AgsTaskThread *) ags_thread_find_type(main_loop,
-						       AGS_TYPE_TASK_THREAD);
+  task_thread = AGS_AUDIO_LOOP(AGS_MAIN(AGS_DEVOUT(AGS_AUDIO(channel->audio)->devout)->ags_main)->main_loop)->task_thread;
 
   /* create append task */
   cancel_channel = ags_cancel_channel_new(channel,
-					  AGS_PLAYBACK(channel->playback)->recall_id[0], TRUE);
+					  AGS_DEVOUT_PLAY(channel->devout_play)->recall_id[0],
+					  AGS_DEVOUT_PLAY(channel->devout_play));
   
   /* append AgsCancelAudio */
-  ags_task_thread_append_task(task_thread,
-			      cancel_channel);
+  ags_task_thread_append_task((AgsTaskThread *) task_thread,
+			      (AgsTask *) cancel_channel);
 }
 
 /**

@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011, 2014 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/X/editor/ags_notebook.h>
@@ -117,7 +118,7 @@ ags_notebook_connect(AgsConnectable *connectable)
 
   notebook = AGS_NOTEBOOK(connectable);
 
-  //TODO:JK: implement me
+  editor = (AgsEditor *) gtk_widget_get_ancestor((GtkWidget *) notebook, AGS_TYPE_EDITOR);
 }
 
 void
@@ -235,20 +236,8 @@ ags_notebook_insert_tab(AgsNotebook *notebook,
 				 tab,
 				 length - position);
 
-  if((AGS_NOTEBOOK_SHOW_AUDIO_CHANNEL & (notebook->flags)) != 0){
-    tab->toggle = (GtkToggleButton *) gtk_toggle_button_new_with_label(g_strdup_printf("channel %d\0",
-										       position));
-  }else if((AGS_NOTEBOOK_SHOW_PAD & (notebook->flags)) != 0){
-    tab->toggle = (GtkToggleButton *) gtk_toggle_button_new_with_label(g_strdup_printf("pad %d\0",
-										       position));
-  }else if((AGS_NOTEBOOK_SHOW_LINE & (notebook->flags)) != 0){
-    tab->toggle = (GtkToggleButton *) gtk_toggle_button_new_with_label(g_strdup_printf("line %d\0",
-										       position));
-  }else{
-    tab->toggle = (GtkToggleButton *) gtk_toggle_button_new_with_label(g_strdup_printf("%d\0",
-										       position));
-  }
-  
+  tab->toggle = (GtkToggleButton *) gtk_toggle_button_new_with_label(g_strdup_printf("channel %d\0",
+										     position + 1));
   gtk_box_pack_start(GTK_BOX(notebook->hbox),
 		     GTK_WIDGET(tab->toggle),
 		     FALSE, FALSE,

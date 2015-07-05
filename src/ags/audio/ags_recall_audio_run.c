@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/audio/ags_recall_audio_run.h>
@@ -286,6 +287,10 @@ ags_recall_audio_run_finalize(GObject *gobject)
 void
 ags_recall_audio_run_connect(AgsConnectable *connectable)
 {
+  if((AGS_RECALL_CONNECTED & (AGS_RECALL(connectable)->flags)) != 0){
+    return;
+  }
+
   ags_recall_audio_run_parent_connectable_interface->connect(connectable);
 
   /* empty */
@@ -302,6 +307,10 @@ ags_recall_audio_run_disconnect(AgsConnectable *connectable)
 void
 ags_recall_audio_run_connect_dynamic(AgsDynamicConnectable *dynamic_connectable)
 {
+  if((AGS_RECALL_DYNAMIC_CONNECTED & (AGS_RECALL(dynamic_connectable)->flags)) != 0){
+    return;
+  }
+
   ags_recall_audio_run_parent_dynamic_connectable_interface->connect_dynamic(dynamic_connectable);
 
   /* empty */
@@ -340,7 +349,7 @@ ags_recall_audio_run_pack(AgsPackable *packable, GObject *container)
   if(AGS_RECALL(packable)->recall_id != NULL){
     recall_id = AGS_RECALL(packable)->recall_id;
 
-    while((list = ags_recall_find_recycling_context(list, recall_id->recycling_context)) != NULL){
+    while((list = ags_recall_find_recycling_container(list, (GObject *) recall_id->recycling_container)) != NULL){
       g_object_set(G_OBJECT(list->data),
 		   "recall-audio-run\0", AGS_RECALL_AUDIO_RUN(packable),
 		   NULL);
@@ -400,7 +409,7 @@ ags_recall_audio_run_unpack(AgsPackable *packable)
   if(AGS_RECALL(packable)->recall_id != NULL){
     recall_id = AGS_RECALL(packable)->recall_id;
 
-    while((list = ags_recall_find_recycling_context(list, recall_id->recycling_context)) != NULL){
+    while((list = ags_recall_find_recycling_container(list, (GObject *) recall_id->recycling_container)) != NULL){
       g_object_set(G_OBJECT(list->data),
 		   "recall_audio_run\0", NULL,
 		   NULL);

@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include "ags_ruler.h"
@@ -141,7 +142,7 @@ ags_ruler_init(AgsRuler *ruler)
   ruler->precision = 1.0;
   ruler->scale_precision = 1.0;
 
-  gtk_widget_set_size_request(ruler,
+  gtk_widget_set_size_request((GtkWidget *) ruler,
 			      20,
 			      24);
 }
@@ -175,7 +176,7 @@ ags_ruler_set_property(GObject *gobject,
 	g_object_ref(G_OBJECT(adjustment));
       }
 
-      ruler->adjustment = (GObject *) adjustment;
+      ruler->adjustment = adjustment;
     }
     break;
   default:
@@ -211,7 +212,7 @@ ags_ruler_map(GtkWidget *widget)
     GTK_WIDGET_CLASS (ags_ruler_parent_class)->map(widget);
     
     gdk_window_show(widget->window);
-    ags_ruler_draw(widget);
+    ags_ruler_draw((AgsRuler *) widget);
   }
 }
 
@@ -393,9 +394,14 @@ ags_ruler_draw(AgsRuler *ruler)
 		  (double) (i),
 		  (double) (widget->allocation.height - AGS_RULER_LARGE_STEP));
 
-    str = g_strdup_printf("%.2f\0",
-			  (ceil(offset) + z) * ruler->scale_precision);
-
+    if(ruler->scale_precision <= 1.0){
+      str = g_strdup_printf("%.0f\0",
+			    floor(offset + z) * ruler->scale_precision + ((i % (guint) step != 0) ? 1: 0));
+    }else{
+      str = g_strdup_printf("%.0f\0",
+			    floor(offset + z) * ruler->scale_precision + ((i % (guint) step != 0) ? 1 * ruler->scale_precision: 0));
+    }
+    
     cairo_show_text(cr,
 		    str);
     g_free(str);

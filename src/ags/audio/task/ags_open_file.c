@@ -1,28 +1,29 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/audio/task/ags_open_file.h>
 
-#include <ags/object/ags_connectable.h>
-#include <ags/object/ags_soundcard.h>
+#include <ags-lib/object/ags_connectable.h>
 
 #include <ags/file/ags_file_link.h>
 
+#include <ags/audio/ags_devout.h>
 #include <ags/audio/ags_audio.h>
 #include <ags/audio/ags_channel.h>
 #include <ags/audio/ags_input.h>
@@ -208,13 +209,25 @@ ags_open_file_launch(AgsTask *task)
 
       iter = iter->next;
     }
+
+    machine = (AgsMachine *) audio->machine;
+    list = gtk_container_get_children(machine->input);
+    list = g_list_nth(list,
+		      pads_old);
+
+    while(list != NULL){
+      ags_connectable_connect(AGS_CONNECTABLE(list->data));
+      gtk_widget_show_all(list->data);
+
+      list = list->next;
+    }
   }
 
   for(i = 0; i < i_stop && current != NULL; i++){
     current_filename = (gchar *) current->data;
 
     audio_file = ags_audio_file_new((gchar *) current_filename,
-				    audio->soundcard,
+				    AGS_DEVOUT(audio->devout),
 				    0, open_file->audio->audio_channels);
 
     ags_audio_file_open(audio_file);
@@ -240,7 +253,7 @@ ags_open_file_launch(AgsTask *task)
 			     &error);
 
 	if(error != NULL){
-	  g_warning(error->message);
+	  g_warning("%s\0", error->message);
 	}
       }
 

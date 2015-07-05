@@ -1,31 +1,33 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/audio/file/ags_audio_file.h>
 
-#include <ags/object/ags_config.h>
-#include <ags/object/ags_connectable.h>
-#include <ags/object/ags_soundcard.h>
+#include <ags-lib/object/ags_connectable.h>
+#include <ags/object/ags_playable.h>
 
 #include <ags/audio/ags_audio_signal.h>
 
 #include <ags/audio/file/ags_playable.h>
 #include <ags/audio/file/ags_sndfile.h>
+
+#include <ags/audio/ags_config.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -47,6 +49,8 @@ void ags_audio_file_get_property(GObject *gobject,
 void ags_audio_file_connect(AgsConnectable *connectable);
 void ags_audio_file_disconnect(AgsConnectable *connectable);
 void ags_audio_file_finalize(GObject *object);
+
+extern AgsConfig *config;
 
 enum{
   PROP_0,
@@ -281,11 +285,15 @@ ags_audio_file_connectable_interface_init(AgsConnectableInterface *connectable)
 void
 ags_audio_file_init(AgsAudioFile *audio_file)
 {
-  audio_file->soundcard = NULL;
+  audio_file->devout = NULL;
 
   audio_file->filename = NULL;
 
-  audio_file->samplerate = AGS_SOUNDCARD_DEFAULT_SAMPLERATE;
+  audio_file->samplerate = g_ascii_strtoull(ags_config_get(config,
+							   AGS_CONFIG_DEVOUT,
+							   "samplerate\0"),
+					    NULL,
+					    10);
   audio_file->frames = 0;
   audio_file->channels = 2;
   audio_file->format = SF_FORMAT_WAV | SF_FORMAT_PCM_16;
@@ -613,8 +621,8 @@ ags_audio_file_read_audio_signal(AgsAudioFile *audio_file)
 {
   GList *list;
 
-  list = ags_playable_read_audio_signal(AGS_PLAYABLE(audio_file->playable),
-					audio_file->soundcard,
+  list = ags_playable_read_audio_signal(AGS_PLAYABLE(audio_file->file),
+					audio_file->devout,
 					audio_file->start_channel, audio_file->audio_channels);
 
   audio_file->audio_signal = list;
@@ -671,8 +679,8 @@ ags_audio_file_flush(AgsAudioFile *audio_file)
 
 /**
  * ags_audio_file_new:
- * @filename: the filename
- * @soundcard: defaults of #AgsSoundcard
+ * @name: the filename
+ * @devout: defaults of #AgsDevout
  * @start_channel: ommited channels
  * @audio_channels: number of channels to read
  *
@@ -683,18 +691,18 @@ ags_audio_file_flush(AgsAudioFile *audio_file)
  * Since: 0.3
  */
 AgsAudioFile*
-ags_audio_file_new(gchar *filename,
-		   GObject *soundcard,
+ags_audio_file_new(gchar *name,
+		   AgsDevout *devout,
 		   guint start_channel, guint audio_channels)
 {
   AgsAudioFile *audio_file;
 
-  audio_file = (AgsAudioFile *) g_object_new(AGS_TYPE_AUDIO_FILE,
-					     "filename\0", filename,
-					     "soundcard\0", soundcard,
-					     "start-channel\0", start_channel,
-					     "audio-channel\0", audio_channels,
-					     NULL);
+  audio_file = (AgsAudioFile *) g_object_new(AGS_TYPE_AUDIO_FILE, NULL);
+
+  audio_file->name = g_strdup(name);
+  audio_file->devout = devout;
+  audio_file->start_channel = start_channel;
+  audio_file->audio_channels = audio_channels;
 
   return(audio_file);
 }

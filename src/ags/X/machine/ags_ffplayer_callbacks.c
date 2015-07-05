@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/X/machine/ags_ffplayer_callbacks.h>
@@ -52,7 +53,7 @@ ags_ffplayer_parent_set_callback(GtkWidget *widget, GtkObject *old_parent, AgsFF
 
   window = (AgsWindow *) gtk_widget_get_toplevel(widget);
   audio = ffplayer->machine.audio;
-  audio->soundcard = (GObject *) window->soundcard;
+  audio->devout = (GObject *) window->devout;
   
   AGS_MACHINE(ffplayer)->name = g_strdup_printf("Default %d\0",
 						ags_window_find_machine_counter(window, AGS_TYPE_FFPLAYER)->counter);
@@ -61,11 +62,20 @@ ags_ffplayer_parent_set_callback(GtkWidget *widget, GtkObject *old_parent, AgsFF
 }
 
 void
+ags_ffplayer_destroy_callback(GtkWidget *widget, AgsFFPlayer *ffplayer)
+{
+  if(ffplayer->open_dialog != NULL){
+    gtk_widget_destroy(ffplayer->open_dialog);
+  }
+}
+
+void
 ags_ffplayer_open_clicked_callback(GtkWidget *widget, AgsFFPlayer *ffplayer)
 {
   GtkFileChooserDialog *file_chooser;
 
-  file_chooser = ags_machine_file_chooser_dialog_new(AGS_MACHINE(ffplayer));
+  ffplayer->open_dialog = 
+    file_chooser = ags_machine_file_chooser_dialog_new(AGS_MACHINE(ffplayer));
   gtk_file_chooser_set_select_multiple(GTK_FILE_CHOOSER(file_chooser),
 				       FALSE);
 
@@ -82,7 +92,7 @@ ags_ffplayer_open_dialog_response_callback(GtkWidget *widget, gint response,
   AgsWindow *window;
   AgsFFPlayer *ffplayer;
   GtkFileChooserDialog *file_chooser;
-  AgsSoundcard *soundcard;
+  AgsDevout *devout;
 
   window = AGS_WINDOW(gtk_widget_get_toplevel(GTK_WIDGET(machine)));
   ffplayer = AGS_FFPLAYER(machine);
@@ -100,8 +110,8 @@ ags_ffplayer_open_dialog_response_callback(GtkWidget *widget, gint response,
       GError *error;
 
       /* clear preset and instrument */
-      ags_combo_box_text_remove_all(ffplayer->preset);
-      ags_combo_box_text_remove_all(ffplayer->instrument);
+      gtk_list_store_clear(GTK_LIST_STORE(gtk_combo_box_get_model(ffplayer->preset)));
+      gtk_list_store_clear(GTK_LIST_STORE(gtk_combo_box_get_model(ffplayer->instrument)));
 
       /* Ipatch related */
       ipatch = g_object_new(AGS_TYPE_IPATCH,
@@ -111,7 +121,7 @@ ags_ffplayer_open_dialog_response_callback(GtkWidget *widget, gint response,
 		   "filename\0", filename,
 		   NULL);
       ffplayer->ipatch = ipatch;
-      ipatch->soundcard = window->soundcard;
+      ipatch->devout = window->devout;
 
       playable = AGS_PLAYABLE(ipatch);
 
@@ -142,6 +152,7 @@ ags_ffplayer_open_dialog_response_callback(GtkWidget *widget, gint response,
 			     0);
   }
 
+  ffplayer->open_dialog = NULL;
   gtk_widget_destroy(widget);
 }
 
@@ -166,7 +177,7 @@ ags_ffplayer_preset_changed_callback(GtkComboBox *preset, AgsFFPlayer *ffplayer)
 			    &error);
 
   /* select first instrument */
-  ags_combo_box_text_remove_all(ffplayer->instrument);
+  gtk_list_store_clear(GTK_LIST_STORE(gtk_combo_box_get_model(ffplayer->instrument)));
 
   ipatch->nth_level = 2;
   instrument = ags_playable_sublevel_names(playable);
@@ -260,7 +271,7 @@ ags_ffplayer_instrument_changed_callback(GtkComboBox *instrument, AgsFFPlayer *f
 
   while(channel != NULL && has_more){
     list = ags_playable_read_audio_signal(playable,
-					  AGS_MACHINE(ffplayer)->audio->soundcard,
+					  (AgsDevout *) AGS_MACHINE(ffplayer)->audio->devout,
 					  channel->audio_channel, AGS_IPATCH_DEFAULT_CHANNELS);
 
     for(i = 0; i < AGS_IPATCH_DEFAULT_CHANNELS && list != NULL; i++){
@@ -274,7 +285,7 @@ ags_ffplayer_instrument_changed_callback(GtkComboBox *instrument, AgsFFPlayer *f
 				     AGS_AUDIO_SIGNAL(list->data));
       //      add_audio_signal = ags_add_audio_signal_new(channel->first_recycling,
       //					  AGS_AUDIO_SIGNAL(list->data),
-      //					  AGS_MACHINE(ffplayer)->audio->soundcard,
+      //					  AGS_MACHINE(ffplayer)->audio->devout,
       //					  NULL,
       //					  AGS_AUDIO_SIGNAL_TEMPLATE);
       //      task = g_list_prepend(task,
@@ -290,7 +301,7 @@ ags_ffplayer_instrument_changed_callback(GtkComboBox *instrument, AgsFFPlayer *f
       
   /* append tasks */
   //  task = g_list_reverse(task);
-  //  ags_task_thread_append_tasks(AGS_AUDIO_LOOP(AGS_MAIN(AGS_SOUNDCARD(AGS_MACHINE(ffplayer)->audio->soundcard)->ags_main)->main_loop)->task_thread,
+  //  ags_task_thread_append_tasks(AGS_AUDIO_LOOP(AGS_MAIN(AGS_DEVOUT(AGS_MACHINE(ffplayer)->audio->devout)->ags_main)->main_loop)->task_thread,
   //			       task);
 }
 

@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef __AGS_MACHINE_H__
@@ -49,6 +50,7 @@ typedef enum{
   AGS_MACHINE_BLOCK_PLAY        = 1 <<  7,
   AGS_MACHINE_BLOCK_STOP        = 1 <<  8,
   AGS_MACHINE_CONNECTED         = 1 <<  9,
+  AGS_MACHINE_REVERSE_NOTATION  = 1 << 10,
 }AgsMachineFlags;
 
 typedef enum{
@@ -56,6 +58,15 @@ typedef enum{
   AGS_MACHINE_ACCEPT_OGG          = 1 <<  1,
   AGS_MACHINE_ACCEPT_SOUNDFONT2   = 1 <<  2,
 }AgsMachineFileInputFlags;
+
+typedef enum{
+  AGS_MACHINE_MONO = 1,
+}AgsMachineMappingFlags;
+
+typedef enum{
+  AGS_MACHINE_POPUP_COPY_PATTERN          = 1,
+  AGS_MACHINE_POPUP_PASTE_PATTERN         = 1 <<  1,
+}AgsMachineEditOptions;
 
 struct _AgsMachine
 {
@@ -70,7 +81,11 @@ struct _AgsMachine
 
   guint flags;
   guint file_input_flags;
-
+  guint mapping_flags;
+  
+  guint bank_0;
+  guint bank_1;
+  
   AgsAudio *audio;
 
   GtkToggleButton *play;
@@ -83,7 +98,7 @@ struct _AgsMachine
   GType input_line_type;
   GtkContainer *input;
 
-  GtkContainer *bridge;
+  GList *port;
 
   gchar **automation_port;
   
@@ -122,6 +137,9 @@ GList* ags_machine_find_port(AgsMachine *machine);
 
 void ags_machine_set_run(AgsMachine *machine,
 			 gboolean run);
+void ags_machine_set_run_extended(AgsMachine *machine,
+				  gboolean run,
+				  gboolean sequencer, gboolean notation);
 
 GtkFileChooserDialog* ags_machine_file_chooser_dialog_new(AgsMachine *machine);
 

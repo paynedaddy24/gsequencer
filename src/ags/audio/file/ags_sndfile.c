@@ -1,19 +1,20 @@
-/* AGS - Advanced GTK Sequencer
- * Copyright (C) 2005-2011 Joël Krähemann
+/* GSequencer - Advanced GTK Sequencer
+ * Copyright (C) 2005-2015 Joël Krähemann
  *
- * This program is free software; you can redistribute it and/or modify
+ * This file is part of GSequencer.
+ *
+ * GSequencer is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
+ * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * GSequencer is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * along with GSequencer.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ags/audio/file/ags_sndfile.h>
@@ -70,11 +71,11 @@ void ags_sndfile_flush(AgsPlayable *playable);
 void ags_sndfile_seek(AgsPlayable *playable, guint frames, gint whence);
 void ags_sndfile_close(AgsPlayable *playable);
 
-sf_vio_get_filelen ags_sndfile_vio_get_filelen(void *user_data);
-sf_vio_seek ags_sndfile_vio_seek(sf_count_t offset, int whence, void *user_data);
-sf_vio_read ags_sndfile_vio_read(void *ptr, sf_count_t count, void *user_data);
-sf_vio_write ags_sndfile_vio_write(const void *ptr, sf_count_t count, void *user_data);
-sf_vio_tell ags_sndfile_vio_tell(const void *ptr, sf_count_t count, void *user_data);
+sf_count_t ags_sndfile_vio_get_filelen(void *user_data);
+sf_count_t ags_sndfile_vio_seek(sf_count_t offset, int whence, void *user_data);
+sf_count_t ags_sndfile_vio_read(void *ptr, sf_count_t count, void *user_data);
+sf_count_t ags_sndfile_vio_write(const void *ptr, sf_count_t count, void *user_data);
+sf_count_t ags_sndfile_vio_tell(const void *ptr, sf_count_t count, void *user_data);
 
 /**
  * SECTION:ags_sndfile
@@ -577,28 +578,31 @@ ags_sndfile_finalize(GObject *gobject)
   /* empty */
 }
 
-sf_vio_get_filelen
+sf_count_t
 ags_sndfile_vio_get_filelen(void *user_data)
 {
   return(AGS_SNDFILE(user_data)->length);
 }
 
-sf_vio_seek
+sf_count_t
 ags_sndfile_vio_seek(sf_count_t offset, int whence, void *user_data)
 {
   switch(whence){
   case SEEK_CUR:
     AGS_SNDFILE(user_data)->current += offset;
+    break;
   case SEEK_SET:
     AGS_SNDFILE(user_data)->current = &(AGS_SNDFILE(user_data)->pointer[offset]);
+    break;
   case SEEK_END:
     AGS_SNDFILE(user_data)->current = &(AGS_SNDFILE(user_data)->pointer[AGS_SNDFILE(user_data)->length - offset]);
+    break;
   }
 
   return(AGS_SNDFILE(user_data)->current - AGS_SNDFILE(user_data)->pointer);
 }
 
-sf_vio_read
+sf_count_t
 ags_sndfile_vio_read(void *ptr, sf_count_t count, void *user_data)
 {
   guchar *retval;
@@ -608,7 +612,7 @@ ags_sndfile_vio_read(void *ptr, sf_count_t count, void *user_data)
   return(retval - AGS_SNDFILE(user_data)->pointer);
 }
 
-sf_vio_write
+sf_count_t
 ags_sndfile_vio_write(const void *ptr, sf_count_t count, void *user_data)
 {
   guchar *retval;
@@ -618,7 +622,7 @@ ags_sndfile_vio_write(const void *ptr, sf_count_t count, void *user_data)
   return(retval - AGS_SNDFILE(user_data)->pointer);
 }
 
-sf_vio_tell
+sf_count_t
 ags_sndfile_vio_tell(const void *ptr, sf_count_t count, void *user_data)
 {
   return(AGS_SNDFILE(user_data)->current - AGS_SNDFILE(user_data)->pointer);
